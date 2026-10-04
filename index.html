@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Расписание Котек: 10а и 1бд3</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --header-bg: #002b66;
+      --header-border: #001f4d;
+      --body-bg: #14171d;
+      --card-bg: #1a1e27;
+      --row-border: #232834;
+      --btn-pill-bg: #1f232d;
+      --btn-pill-border: #2e3543;
+      --text-white: #ffffff;
+      --text-muted: #8e95a5;
+      --time-green: #4ade80;
+      --accent-blue: #1d4ed8;
+      --accent-active: #2563eb;
+      --now-badge: #ef4444;
+      --font: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--body-bg);
+      color: var(--text-white);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app-wrapper {
+      max-width: 480px;
+      margin: 0 auto;
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--body-bg);
+      box-shadow: 0 0 25px rgba(0, 0, 0, 0.5);
+      position: relative;
+    }
+
+    /* ШАПКА В СТИЛЕ КОТЕК */
+    .app-header {
+      background-color: var(--header-bg);
+      padding: 12px 14px 10px 14px;
+      text-align: center;
+      border-bottom: 2px solid var(--header-border);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 58px;
+    }
+
+    .header-back-btn {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+    }
+
+    .header-back-btn:active {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .school-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.25;
+    }
+
+    .school-sub {
+      font-size: 0.78rem;
+      color: #dbeafe;
+      margin-top: 2px;
+    }
+
+    .update-time {
+      font-size: 0.75rem;
+      color: #93c5fd;
+      margin-top: 3px;
+      font-weight: 500;
+    }
+
+    .header-page-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ГЛАВНОЕ МЕНЮ */
+    .view-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .home-menu {
+      padding: 24px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex: 1;
+    }
+
+    .pill-btn {
+      background: var(--btn-pill-bg);
+      border: 1px solid var(--btn-pill-border);
+      border-radius: 28px;
+      padding: 15px 20px;
+      color: #ffffff;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: background 0.15s ease, transform 0.1s ease;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+    }
+
+    .pill-btn:active {
+      background: #2a303e;
+      transform: scale(0.985);
+    }
+
+    .pill-indicator {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #475569;
+      position: absolute;
+      left: 18px;
+    }
+
+    .pill-btn.active .pill-indicator {
+      background: var(--time-green);
+    }
+
+    /* СИНХРОННЫЙ ИНФОРМЕР ВНИЗУ */
+    .sync-footer-card {
+      margin: auto 18px 18px 18px;
+      background: #181c25;
+      border: 1px solid #28303f;
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sync-line {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+    }
+
+    .sync-label {
+      color: var(--text-muted);
+    }
+
+    .sync-val {
+      font-weight: 600;
+    }
+
+    .sync-val.boy {
+      color: #60a5fa;
+    }
+
+    .sync-val.girl {
+      color: #f472b6;
+    }
+
+    .sync-alert {
+      background: rgba(74, 222, 128, 0.12);
+      border: 1px solid #4ade80;
+      color: #86efac;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+
+    /* ПОДШАПКА РАСПИСАНИЯ */
+    .schedule-subbar {
+      background: #0d121a;
+      border-bottom: 1px solid var(--row-border);
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .day-selector-pills {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .day-pill {
+      flex: 1;
+      min-width: 44px;
+      text-align: center;
+      padding: 6px 0;
+      background: #1c212c;
+      border: 1px solid var(--btn-pill-border);
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .day-pill.active {
+      background: var(--header-bg);
+      border-color: #3b82f6;
+      color: #fff;
+    }
+
+    .current-date-title {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .today-jump-btn {
+      background: #0369a1;
+      border: none;
+      color: #fff;
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* СПИСОК УРОКОВ (5185.jpg) */
+    .lessons-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .lesson-item {
+      display: flex;
+      flex-direction: column;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--row-border);
+      background: var(--body-bg);
+      position: relative;
+    }
+
+    .lesson-item.is-now {
+      background: #1c1519;
+      border-left: 3px solid var(--now-badge);
+    }
+
+    .lesson-item.is-now::after {
+      content: 'СЕЙЧАС';
+      position: absolute;
+      top: 10px;
+      right: 14px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      background: var(--now-badge);
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .lesson-top-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+
+    .lesson-num {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      width: 14px;
+      text-align: right;
+    }
+
+    .lesson-time-box {
+      display: flex;
+      flex-direction: column;
+      min-width: 46px;
+      line-height: 1.15;
+    }
+
+    .lesson-time {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--time-green);
+    }
+
+    .lesson-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .lesson-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .lesson-subinfo {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .lesson-hw {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.06);
+    }
+
+    .hw-chk {
+      width: 15px;
+      height: 15px;
+      accent-color: #2563eb;
+      cursor: pointer;
+    }
+
+    .hw-text {
+      background: transparent;
+      border: none;
+      color: #cbd5e1;
+      font-size: 0.78rem;
+      width: 100%;
+      outline: none;
+    }
+
+    .hw-text::placeholder {
+      color: #475569;
+    }
+
+    /* НАСТРОЙКИ */
+    .settings-view {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .set-card {
+      background: var(--card-bg);
+      border: 1px solid var(--btn-pill-border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .set-heading {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #93c5fd;
+    }
+
+    .set-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .set-input {
+      width: 100%;
+      background: #101319;
+      border: 1px solid #2e3543;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      outline: none;
+    }
+
+    .set-input:focus {
+      border-color: #3b82f6;
+    }
+
+    .btn-action {
+      background: #2563eb;
+      border: none;
+      color: #fff;
+      padding: 9px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .btn-action:active {
+      background: #1d4ed8;
+    }
+
+    .btn-action.secondary {
+      background: #334155;
+    }
+
+    .bell-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .bell-item {
+      background: #11141a;
+      border: 1px solid #282f3d;
+      border-radius: 6px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .bell-item label {
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
+
+    .bell-item input {
+      background: transparent;
+      border: none;
+      color: #4ade80;
+      font-weight: 600;
+      font-size: 0.78rem;
+      outline: none;
+    }
+
+    .nika-footer {
+      text-align: center;
+      padding: 16px;
+      font-size: 0.72rem;
+      color: #4b5565;
+      margin-top: auto;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-wrapper">
+    <!-- ЕДИНАЯ ШАПКА КОТЕК -->
+    <header class="app-header" id="app-header">
+      <button class="header-back-btn hidden" id="header-back-btn" onclick="openHome()">←</button>
+      <div id="header-home-info">
+        <div class="school-title">Синхронное расписание</div>
+        <div class="school-sub">СОШ №2 & ОКЭИ</div>
+        <div class="update-time" id="header-date">Обновлено: сегодня</div>
+      </div>
+      <div class="header-page-title hidden" id="header-sub-title">РАСПИСАНИЕ</div>
+    </header>
+
+    <!-- 1. ГЛАВНАЯ СТРАНИЦА: 3 ПУНКТА ПО РЕФЕРЕНСУ (5183.jpg) -->
+    <main class="view-container" id="view-home">
+      <div class="home-menu">
+        <button class="pill-btn" onclick="openSchedule('boy')">
+          <span class="pill-indicator"></span>
+          <div style="display:flex; flex-direction:column; align-items:center;">
+            <span style="font-size:1.15rem; font-weight:700;">10а</span>
+            <span style="font-size:0.75rem; color:#94a3b8; font-weight:400;">Школа №2</span>
+          </div>
+        </button>
+        <button class="pill-btn" onclick="openSchedule('girl')">
+          <span class="pill-indicator"></span>
+          <div style="display:flex; flex-direction:column; align-items:center;">
+            <span style="font-size:1.15rem; font-weight:700;">1бд3</span>
+            <span style="font-size:0.75rem; color:#94a3b8; font-weight:400;">ОКЭИ • Банковское дело</span>
+          </div>
+        </button>
+        <button class="pill-btn" onclick="openSettings()">
+          <span class="pill-indicator"></span>
+          <div style="display:flex; flex-direction:column; align-items:center;">
+            <span style="font-size:1.05rem; font-weight:700;">НАСТРОЙКИ</span>
+            <span style="font-size:0.75rem; color:#94a3b8; font-weight:400;">Звонки, Gemini ИИ, редактирование</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- СИНХРОННЫЙ РАДАР -->
+      <div class="sync-footer-card">
+        <div class="sync-line">
+          <span class="sync-label">Ты (10а):</span>
+          <span class="sync-val boy" id="radar-boy">Определяем...</span>
+        </div>
+        <div class="sync-line">
+          <span class="sync-label">Она (1бд3 ОКЭИ):</span>
+          <span class="sync-val girl" id="radar-girl">Определяем...</span>
+        </div>
+        <div class="sync-alert" id="radar-free-alert">☕ У обоих сейчас свободное время или перемена!</div>
+      </div>
+
+      <div class="nika-footer">© Котек</div>
+    </main>
+
+    <!-- 2. ЭКРАН РАСПИСАНИЯ УРОКОВ (5185.jpg) -->
+    <section class="view-container hidden" id="view-schedule">
+      <div class="schedule-subbar">
+        <div class="day-selector-pills">
+          <button class="day-pill" data-d="0" onclick="selectDay(0)">Пн</button>
+          <button class="day-pill" data-d="1" onclick="selectDay(1)">Вт</button>
+          <button class="day-pill" data-d="2" onclick="selectDay(2)">Ср</button>
+          <button class="day-pill" data-d="3" onclick="selectDay(3)">Чт</button>
+          <button class="day-pill" data-d="4" onclick="selectDay(4)">Пт</button>
+          <button class="day-pill" data-d="5" onclick="selectDay(5)">Сб</button>
+        </div>
+        <div class="current-date-title">
+          <span id="sched-day-name">Понедельник</span>
+          <button class="today-jump-btn" onclick="jumpToday()">Сегодня</button>
+        </div>
+      </div>
+
+      <div class="lessons-list" id="lessons-render-target"></div>
+      <div class="nika-footer">© Котек</div>
+    </section>
+
+    <!-- 3. ЭКРАН НАСТРОЕК -->
+    <section class="view-container hidden" id="view-settings">
+      <div class="settings-view">
+        <!-- Быстрые ссылки -->
+        <div class="set-card" style="gap:8px;">
+          <div class="set-heading">🔗 Быстрые ссылки</div>
+          <a href="https://raspisanie.nikasoft.ru/17407888.html#cls" target="_blank" rel="noopener"
+            style="display:flex; align-items:center; gap:10px; background:#11141a; border:1px solid #2e3543; border-radius:8px; padding:10px 14px; text-decoration:none; color:#fff;">
+            <span style="font-size:1.3rem;">🏫</span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.88rem; font-weight:600;">Расписание СОШ №2</span>
+              <span style="font-size:0.72rem; color:#94a3b8;">raspisanie.nikasoft.ru</span>
+            </div>
+            <span style="margin-left:auto; color:#475569; font-size:1rem;">→</span>
+          </a>
+          <a href="https://oksei.ru" target="_blank" rel="noopener"
+            style="display:flex; align-items:center; gap:10px; background:#11141a; border:1px solid #2e3543; border-radius:8px; padding:10px 14px; text-decoration:none; color:#fff;">
+            <span style="font-size:1.3rem;">🎓</span>
+            <div style="display:flex; flex-direction:column;">
+              <span style="font-size:0.88rem; font-weight:600;">Сайт ОКЭИ</span>
+              <span style="font-size:0.72rem; color:#94a3b8;">oksei.ru</span>
+            </div>
+            <span style="margin-left:auto; color:#475569; font-size:1rem;">→</span>
+          </a>
+        </div>
+
+        <!-- API Ключ -->
+        <div class="set-card">
+          <div class="set-heading">🔑 Gemini API Ключ</div>
+          <div class="set-desc">Для работы нейросети по распознаванию фото расписания. Ключ сохраняется в браузере.
+          </div>
+          <input type="password" id="api-key-field" class="set-input" placeholder="AIzaSy...">
+          <button class="btn-action" onclick="saveApiKey()">Сохранить ключ</button>
+        </div>
+
+        <!-- Расписание по фото -->
+        <div class="set-card">
+          <div class="set-heading">📸 Расписание по фото (ИИ)</div>
+          <div class="set-desc">Сфотографируй расписание школы или колледжа — нейросеть заполнит уроки автоматически:
+          </div>
+          <select id="photo-target-sel" class="set-input">
+            <option value="girl">Для 1бд3 (ОКЭИ)</option>
+            <option value="boy">Для 10а (Школа №2)</option>
+          </select>
+          <input type="file" id="photo-file-field" accept="image/*" class="set-input">
+          <button class="btn-action" id="photo-upload-btn" onclick="parseSchedulePhoto()">Распознать фото через
+            Gemini</button>
+          <div id="photo-msg" style="font-size:0.75rem; color:#60a5fa;"></div>
+        </div>
+
+        <!-- Сайт школы Ника-Софт -->
+        <div class="set-card">
+          <div class="set-heading">🌐 Синхронизация 10а с сайта школы</div>
+          <div class="set-desc">Сайт школы: МОБУ Саракташская СОШ №2. Система автоматически извлекает расписание и
+            замены конкретно для <b>10а класса</b>:</div>
+          <input type="text" id="school-link-field" class="set-input"
+            value="https://raspisanie.nikasoft.ru/17407888.html#cls">
+          <div style="display:flex; gap:8px;">
+            <button class="btn-action" style="flex:1;" onclick="syncSchoolSchedule()">⚡ Синхронизировать 10а с
+              сайта</button>
+          </div>
+          <div id="school-msg" style="font-size:0.75rem; color:#34d399; font-weight:500;"></div>
+
+          <div class="set-desc" style="margin-top:6px;">Или вставьте скопированный текст расписания/замен вручную:</div>
+          <textarea id="school-text-field" class="set-input" style="height:60px;"
+            placeholder="Вставьте сюда скопированный текст или код страницы расписания..."></textarea>
+          <button class="btn-action secondary" onclick="parseSchoolInput()">Распарсить вставленный текст</button>
+        </div>
+
+        <!-- Время звонков -->
+        <div class="set-card">
+          <div class="set-heading">⏰ Изменить звонки (с 08:00)</div>
+          <div class="set-desc">Звонки 10а класса:</div>
+          <div class="bell-grid" id="bell-edit-boy"></div>
+
+          <div class="set-desc" style="margin-top:6px;">Звонки ОКЭИ (Понедельник):</div>
+          <div class="bell-grid" id="bell-edit-girl-mon"></div>
+
+          <div class="set-desc" style="margin-top:6px;">Звонки ОКЭИ (Вт - Сб):</div>
+          <div class="bell-grid" id="bell-edit-girl-other"></div>
+
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="btn-action" style="flex:1;" onclick="saveBells()">Сохранить звонки</button>
+            <button class="btn-action secondary" style="flex:1;" onclick="resetBells()">Сбросить</button>
+          </div>
+        </div>
+
+        <!-- 5. Ручной редактор уроков -->
+        <div class="set-card">
+          <div class="set-heading">✏️ Ручное редактирование предметов</div>
+          <div class="set-desc">Изменение уроков на любой день недели для школы или колледжа:</div>
+          <div style="display:flex; gap:8px;">
+            <select id="manual-target-sel" class="set-input" onchange="renderManualEditor()">
+              <option value="boy">10а (Школа №2)</option>
+              <option value="girl">1бд3 (ОКЭИ)</option>
+            </select>
+            <select id="manual-day-sel" class="set-input" onchange="renderManualEditor()">
+              <option value="0">Понедельник</option>
+              <option value="1">Вторник</option>
+              <option value="2">Среда</option>
+              <option value="3">Четверг</option>
+              <option value="4">Пятница</option>
+              <option value="5">Суббота</option>
+            </select>
+          </div>
+          <div id="manual-lessons-list" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;"></div>
+          <div style="display:flex; gap:8px; margin-top:6px;">
+            <button class="btn-action secondary" style="flex:1;" onclick="addManualLessonRow()">+ Добавить урок</button>
+            <button class="btn-action" style="flex:1;" onclick="saveManualSchedule()">Сохранить уроки</button>
+          </div>
+        </div>
+      </div>
+      <div class="nika-footer">© Котек</div>
+    </section>
+  </div>
+
+  <script>
+    // --- ДАННЫЕ РАСПИСАНИЯ И ЗВОНКОВ ПО УМОЛЧАНИЮ ---
+    const DEF_BOY_BELLS = [
+      { num: 1, start: "08:00", end: "08:40" },
+      { num: 2, start: "08:50", end: "09:30" },
+      { num: 3, start: "09:40", end: "10:20" },
+      { num: 4, start: "10:30", end: "11:10" },
+      { num: 5, start: "11:20", end: "12:00" },
+      { num: 6, start: "12:05", end: "12:45" },
+      { num: 7, start: "12:50", end: "13:30" }
+    ];
+
+    const DEF_GIRL_BELLS_MON = [
+      { num: 1, start: "08:30", end: "10:00" },
+      { num: 2, start: "10:10", end: "11:40" },
+      { num: 3, start: "12:00", end: "13:30" },
+      { num: 4, start: "14:25", end: "15:55" },
+      { num: 5, start: "16:05", end: "17:35" },
+      { num: 6, start: "17:40", end: "19:10" }
+    ];
+
+    const DEF_GIRL_BELLS_OTHER = [
+      { num: 1, start: "08:30", end: "10:00" },
+      { num: 2, start: "10:10", end: "11:40" },
+      { num: 3, start: "12:00", end: "13:30" },
+      { num: 4, start: "14:00", end: "15:30" },
+      { num: 5, start: "15:40", end: "17:10" },
+      { num: 6, start: "17:15", end: "18:45" }
+    ];
+
+    const DEF_BOY_SCHEDULE = {
+      0: [
+        { num: 1, subject: "Разговоры о важном", sub: "Крутских Т.М. (308)" },
+        { num: 2, subject: "Вероят. и стат.", sub: "Шеврина Т.В. (308)" },
+        { num: 3, subject: "Геометрия", sub: "Шеврина Т.В. (308)" },
+        { num: 4, subject: "Ин.яз.(англ.)", sub: "Ишмухаметова Г.Б. (305)" },
+        { num: 5, subject: "Биология", sub: "Кашина Л.И. (208)" },
+        { num: 6, subject: "История", sub: "Архипова Т.А. (304)" },
+        { num: 7, subject: "УК (Физика)", sub: "Шошина И.А. (211)" }
+      ],
+      1: [
+        { num: 1, subject: "Алгебра", sub: "Шеврина Т.В. (308)" },
+        { num: 2, subject: "Алгебра", sub: "Шеврина Т.В. (308)" },
+        { num: 3, subject: "Физика", sub: "Шошина И.А. (211)" },
+        { num: 4, subject: "Физика", sub: "Шошина И.А. (211)" },
+        { num: 5, subject: "Русский язык", sub: "Каб. 308" },
+        { num: 6, subject: "Литература", sub: "Каб. 308" },
+        { num: 7, subject: "Химия", sub: "Каб. 206" }
+      ],
+      2: [
+        { num: 1, subject: "Геометрия", sub: "Каб. 308" },
+        { num: 2, subject: "Физика", sub: "Каб. 211" },
+        { num: 3, subject: "Информатика", sub: "Каб. 312" },
+        { num: 4, subject: "Информатика", sub: "Каб. 312" },
+        { num: 5, subject: "Обществознание", sub: "Каб. 304" },
+        { num: 6, subject: "История", sub: "Каб. 304" },
+        { num: 7, subject: "Физкультура", sub: "Спортзал" }
+      ],
+      3: [
+        { num: 1, subject: "Алгебра", sub: "Каб. 308" },
+        { num: 2, subject: "Алгебра", sub: "Каб. 308" },
+        { num: 3, subject: "Физика", sub: "Каб. 211" },
+        { num: 4, subject: "Ин.яз. (англ.)", sub: "Каб. 305" },
+        { num: 5, subject: "Литература", sub: "Каб. 308" },
+        { num: 6, subject: "Русский язык", sub: "Каб. 308" },
+        { num: 7, subject: "Физкультура", sub: "Спортзал" }
+      ],
+      4: [
+        { num: 1, subject: "Физика", sub: "Каб. 211" },
+        { num: 2, subject: "Физика", sub: "Каб. 211" },
+        { num: 3, subject: "Геометрия", sub: "Каб. 308" },
+        { num: 4, subject: "ОБЖ / ОБЗР", sub: "Каб. 102" },
+        { num: 5, subject: "География", sub: "Каб. 204" },
+        { num: 6, subject: "Индивидуальный проект", sub: "Каб. 308" },
+        { num: 7, subject: "Классный час", sub: "Каб. 308" }
+      ],
+      5: [
+        { num: 1, subject: "Электив: Математика", sub: "Каб. 308" },
+        { num: 2, subject: "Электив: Физика", sub: "Каб. 211" },
+        { num: 3, subject: "Физкультура", sub: "Спортзал" },
+        { num: 4, subject: "Родной язык", sub: "Каб. 308" }
+      ]
+    };
+
+    const DEF_GIRL_SCHEDULE = {
+      0: [
+        { num: 1, subject: "Математика", sub: "Мазурина Ю.А. • Ауд. 202" },
+        { num: 2, subject: "География", sub: "Подшивалов А.А. • Ауд. 105" },
+        { num: 3, subject: "Иностранный язык", sub: "Лягута В.В. • Ауд. 38" },
+        { num: 4, subject: "РОВ", sub: "Лаврухина М.В. • Ауд. 21" }
+      ],
+      1: [
+        { num: 2, subject: "Информатика", sub: "Бухарова Э.Э. • Ауд. 207" },
+        { num: 3, subject: "Литература", sub: "Лыжина Л.А. • Ауд. 36" },
+        { num: 4, subject: "Русский язык", sub: "Синенко Л.В. • Ауд. 402" }
+      ],
+      2: [
+        { num: 2, subject: "История", sub: "Мязина Е.В. • Ауд. 404" },
+        { num: 3, subject: "Математика", sub: "Мазурина Ю.А. • Ауд. 34" }
+      ],
+      3: [
+        { num: 1, subject: "Математика", sub: "Мазурина Ю.А. • Ауд. 37" },
+        { num: 2, subject: "География", sub: "Подшивалов А.А. • Ауд. 38" },
+        { num: 3, subject: "Русский язык", sub: "Синенко Л.В. • Ауд. 22" },
+        { num: 4, subject: "История", sub: "Мязина Е.В. • Производственный" }
+      ],
+      4: [
+        { num: 2, subject: "Литература", sub: "Лыжина Л.А. • Ауд. 36" },
+        { num: 3, subject: "Математика", sub: "Мазурина Ю.А. • Ауд. 201" },
+        { num: 4, subject: "Иностранный язык", sub: "Лягута В.В. • Ауд. 38" }
+      ],
+      5: [
+        { num: 2, subject: "Физическая культура", sub: "Оденбах Ю.А. • Спортзал" },
+        { num: 3, subject: "Литература", sub: "Лыжина Л.А. • Ауд. 36" },
+        { num: 4, subject: "Биология", sub: "Сафонов М.А. • Ауд. 25" }
+      ]
+    };
+
+    let boyBells = JSON.parse(localStorage.getItem('nk_boy_bells')) || DEF_BOY_BELLS;
+    let girlBellsMon = JSON.parse(localStorage.getItem('nk_girl_bells_mon')) || DEF_GIRL_BELLS_MON;
+    let girlBellsOther = JSON.parse(localStorage.getItem('nk_girl_bells_other')) || DEF_GIRL_BELLS_OTHER;
+
+    let boySchedule = JSON.parse(localStorage.getItem('nk_boy_sched')) || DEF_BOY_SCHEDULE;
+    let girlSchedule = JSON.parse(localStorage.getItem('nk_girl_sched')) || DEF_GIRL_SCHEDULE;
+
+    let activeSchedTarget = 'boy'; // 'boy' или 'girl'
+    let selectedDay = (() => { const d = new Date().getDay(); return d === 0 ? 0 : d - 1; })();
+    const DAY_NAMES = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+
+    function toMin(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
+
+    // --- ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ ---
+    function openHome() {
+      document.getElementById('view-home').classList.remove('hidden');
+      document.getElementById('view-schedule').classList.add('hidden');
+      document.getElementById('view-settings').classList.add('hidden');
+
+      document.getElementById('header-back-btn').classList.add('hidden');
+      document.getElementById('header-home-info').classList.remove('hidden');
+      document.getElementById('header-sub-title').classList.add('hidden');
+      updateRadar();
+    }
+
+    function openSchedule(target) {
+      activeSchedTarget = target;
+      document.getElementById('view-home').classList.add('hidden');
+      document.getElementById('view-schedule').classList.remove('hidden');
+      document.getElementById('view-settings').classList.add('hidden');
+
+      document.getElementById('header-back-btn').classList.remove('hidden');
+      document.getElementById('header-home-info').classList.add('hidden');
+      const titleEl = document.getElementById('header-sub-title');
+      titleEl.classList.remove('hidden');
+      titleEl.textContent = target === 'boy' ? 'РАСПИСАНИЕ 10а' : 'РАСПИСАНИЕ 1бд3 ОКЭИ';
+
+      renderScheduleView();
+    }
+
+    function openSettings() {
+      document.getElementById('view-home').classList.add('hidden');
+      document.getElementById('view-schedule').classList.add('hidden');
+      document.getElementById('view-settings').classList.remove('hidden');
+
+      document.getElementById('header-back-btn').classList.remove('hidden');
+      document.getElementById('header-home-info').classList.add('hidden');
+      const titleEl = document.getElementById('header-sub-title');
+      titleEl.classList.remove('hidden');
+      titleEl.textContent = 'НАСТРОЙКИ';
+
+      renderSettingsView();
+      renderManualEditor();
+    }
+
+    // --- РАСПИСАНИЕ: РЕНДЕР ---
+    function selectDay(dayIdx) {
+      selectedDay = dayIdx;
+      renderScheduleView();
+    }
+
+    function jumpToday() {
+      const d = new Date().getDay();
+      selectedDay = d === 0 ? 0 : d - 1;
+      renderScheduleView();
+    }
+
+    function renderScheduleView() {
+      document.querySelectorAll('.day-pill').forEach(p => {
+        p.classList.toggle('active', parseInt(p.dataset.d) === selectedDay);
+      });
+      document.getElementById('sched-day-name').textContent = DAY_NAMES[selectedDay];
+
+      const cont = document.getElementById('lessons-render-target');
+      cont.innerHTML = '';
+
+      const now = new Date();
+      const realDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const curM = now.getHours() * 60 + now.getMinutes();
+
+      const isBoy = activeSchedTarget === 'boy';
+      const lessons = (isBoy ? boySchedule[selectedDay] : girlSchedule[selectedDay]) || [];
+      const bells = isBoy ? boyBells : (selectedDay === 0 ? girlBellsMon : girlBellsOther);
+
+      if (lessons.length === 0) {
+        cont.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted); font-size:0.9rem;">В этот день занятий нет</div>';
+        return;
+      }
+
+      lessons.forEach(l => {
+        const bell = bells.find(b => b.num === l.num);
+        const isNow = selectedDay === realDay && bell && curM >= toMin(bell.start) && curM <= toMin(bell.end);
+        const hwKey = `nk_hw_${activeSchedTarget}_${selectedDay}_${l.num}`;
+        const chkKey = `nk_chk_${activeSchedTarget}_${selectedDay}_${l.num}`;
+
+        const el = document.createElement('div');
+        el.className = `lesson-item ${isNow ? 'is-now' : ''}`;
+        el.innerHTML = `
+          <div class="lesson-top-row">
+            <div class="lesson-num">${l.num}</div>
+            <div class="lesson-time-box">
+              <span class="lesson-time">${bell ? bell.start : '--:--'}</span>
+              <span class="lesson-time">${bell ? bell.end : '--:--'}</span>
+            </div>
+            <div class="lesson-info">
+              <div class="lesson-name">${l.subject}</div>
+              <div class="lesson-subinfo">${l.sub || (l.teacher ? `${l.teacher} • ${l.room || ''}` : '')}</div>
+            </div>
+          </div>
+          <div class="lesson-hw">
+            <input type="checkbox" class="hw-chk" ${localStorage.getItem(chkKey) === '1' ? 'checked' : ''} onchange="localStorage.setItem('${chkKey}', this.checked ? '1' : '0')">
+            <input type="text" class="hw-text" placeholder="ДЗ или заметка к уроку..." value="${localStorage.getItem(hwKey) || ''}" onchange="localStorage.setItem('${hwKey}', this.value)">
+          </div>
+        `;
+        cont.appendChild(el);
+      });
+    }
+
+    // --- СИНХРОННЫЙ РАДАР (КТО ГДЕ И ПЕРЕМЕНЫ) ---
+    function updateRadar() {
+      const now = new Date();
+      const day = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const m = now.getHours() * 60 + now.getMinutes();
+
+      let bTxt = "Уроков нет", bFree = true;
+      let gTxt = "Пар нет", gFree = true;
+
+      if (day >= 0 && day <= 5) {
+        // Статус парня (10а)
+        const bl = boySchedule[day] || [];
+        if (bl.length > 0) {
+          const s = toMin(boyBells[0].start);
+          const e = toMin(boyBells[bl.length - 1].end);
+          if (m < s) { bTxt = `Начало в ${boyBells[0].start}`; }
+          else if (m > e) { bTxt = "Уроки закончились"; }
+          else {
+            bFree = false;
+            for (let i = 0; i < bl.length; i++) {
+              const b = boyBells[i];
+              if (m >= toMin(b.start) && m <= toMin(b.end)) {
+                bTxt = `${bl[i].subject} (до ${b.end})`;
+                break;
+              }
+              if (i < bl.length - 1 && m > toMin(b.end) && m < toMin(boyBells[i + 1].start)) {
+                bTxt = `Перемена (до ${boyBells[i + 1].start})`;
+                bFree = true;
+                break;
+              }
+            }
+          }
+        }
+
+        // Статус девушки (1бд3 ОКЭИ)
+        const gl = girlSchedule[day] || [];
+        const gb = day === 0 ? girlBellsMon : girlBellsOther;
+        if (gl.length > 0) {
+          const firstB = gb.find(x => x.num === gl[0].num);
+          const lastB = gb.find(x => x.num === gl[gl.length - 1].num);
+          if (firstB && m < toMin(firstB.start)) { gTxt = `Начало в ${firstB.start}`; }
+          else if (lastB && m > toMin(lastB.end)) { gTxt = "Пары закончились"; }
+          else {
+            let found = false;
+            for (let item of gl) {
+              const b = gb.find(x => x.num === item.num);
+              if (b && m >= toMin(b.start) && m <= toMin(b.end)) {
+                gTxt = `${item.subject} (до ${b.end})`;
+                found = true;
+                gFree = false;
+                break;
+              }
+            }
+            if (!found) { gTxt = "Перемена / Окно"; gFree = true; }
+          }
+        }
+      }
+
+      document.getElementById('radar-boy').textContent = bTxt;
+      document.getElementById('radar-girl').textContent = gTxt;
+      document.getElementById('radar-free-alert').style.display = (bFree && gFree && day <= 5) ? 'block' : 'none';
+    }
+
+    // --- НАСТРОЙКИ: РЕНДЕР И СОХРАНЕНИЕ ---
+    function renderSettingsView() {
+      document.getElementById('api-key-field').value = localStorage.getItem('gemini_api_key') || '';
+
+      // Звонки 10а
+      const bCont = document.getElementById('bell-edit-boy');
+      bCont.innerHTML = '';
+      boyBells.forEach((b, idx) => {
+        bCont.innerHTML += `
+          <div class="bell-item">
+            <label>${b.num} урок</label>
+            <input type="text" id="ed_bb_${idx}" value="${b.start} - ${b.end}">
+          </div>
+        `;
+      });
+
+      // Звонки ОКЭИ Пн
+      const gmCont = document.getElementById('bell-edit-girl-mon');
+      gmCont.innerHTML = '';
+      girlBellsMon.forEach((b, idx) => {
+        gmCont.innerHTML += `
+          <div class="bell-item">
+            <label>${b.num} пара</label>
+            <input type="text" id="ed_gmb_${idx}" value="${b.start} - ${b.end}">
+          </div>
+        `;
+      });
+
+      // Звонки ОКЭИ Вт-Сб
+      const goCont = document.getElementById('bell-edit-girl-other');
+      goCont.innerHTML = '';
+      girlBellsOther.forEach((b, idx) => {
+        goCont.innerHTML += `
+          <div class="bell-item">
+            <label>${b.num} пара</label>
+            <input type="text" id="ed_gob_${idx}" value="${b.start} - ${b.end}">
+          </div>
+        `;
+      });
+    }
+
+    function saveApiKey() {
+      const val = document.getElementById('api-key-field').value.trim();
+      localStorage.setItem('gemini_api_key', val);
+      alert('API ключ успешно сохранен!');
+    }
+
+    function saveBells() {
+      boyBells.forEach((b, idx) => {
+        const [s, e] = document.getElementById(`ed_bb_${idx}`).value.split('-').map(x => x.trim());
+        if (s && e) { b.start = s; b.end = e; }
+      });
+      girlBellsMon.forEach((b, idx) => {
+        const [s, e] = document.getElementById(`ed_gmb_${idx}`).value.split('-').map(x => x.trim());
+        if (s && e) { b.start = s; b.end = e; }
+      });
+      girlBellsOther.forEach((b, idx) => {
+        const [s, e] = document.getElementById(`ed_gob_${idx}`).value.split('-').map(x => x.trim());
+        if (s && e) { b.start = s; b.end = e; }
+      });
+
+      localStorage.setItem('nk_boy_bells', JSON.stringify(boyBells));
+      localStorage.setItem('nk_girl_bells_mon', JSON.stringify(girlBellsMon));
+      localStorage.setItem('nk_girl_bells_other', JSON.stringify(girlBellsOther));
+      alert('Звонки сохранены!');
+    }
+
+    // --- РАСПОЗНАВАНИЕ ФОТО ЧЕРЕЗ GEMINI ---
+    async function parseSchedulePhoto() {
+      const apiKey = localStorage.getItem('gemini_api_key');
+      const fileInput = document.getElementById('photo-file-field');
+      const target = document.getElementById('photo-target-sel').value;
+      const msg = document.getElementById('photo-msg');
+
+      if (!apiKey) { alert('Сначала введите Gemini API ключ выше!'); return; }
+      if (!fileInput.files || fileInput.files.length === 0) { alert('Выберите фото расписания!'); return; }
+
+      const file = fileInput.files[0];
+      msg.textContent = '⏳ Анализируем изображение через нейросеть...';
+
+      try {
+        const base64Data = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
+
+        const prompt = `Ты парсер расписания. Проанализируй фото и извлеки уроки/пары для ${target === 'girl' ? 'колледжа ОКЭИ, группа 1бд3' : 'школы №2, 10а класс'}.
+Верни ТОЛЬКО строгий JSON без markdown:
+{
+  "0": [{"num": 1, "subject": "Предмет", "sub": "Учитель/Аудитория"}],
+  "1": [...], "2": [...], "3": [...], "4": [...], "5": [...]
+}
+Где "0"-Пн, "1"-Вт, "2"-Ср, "3"-Чт, "4"-Пт, "5"-Сб.`;
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: file.type || "image/jpeg", data: base64Data } }] }]
+          })
+        });
+
+        const resData = await response.json();
+        if (resData.error) {
+          throw new Error(resData.error.message || 'Ошибка API Google');
+        }
+        if (!resData.candidates || !resData.candidates[0] || !resData.candidates[0].content) {
+          throw new Error('Нейросеть вернула пустой ответ (проверь соединение или фото)');
+        }
+        const text = resData.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(text);
+
+        if (target === 'girl') {
+          girlSchedule = parsed;
+          localStorage.setItem('nk_girl_sched', JSON.stringify(girlSchedule));
+        } else {
+          boySchedule = parsed;
+          localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
+        }
+
+        msg.style.color = '#34d399';
+        msg.textContent = '✓ Расписание успешно распознано и применено!';
+      } catch (e) {
+        msg.style.color = '#ef4444';
+        msg.textContent = 'Ошибка: ' + e.message;
+      }
+    }
+
+    // --- СИНХРОНИЗАЦИЯ С САЙТА ШКОЛЫ (НИКА-СОФТ) ДЛЯ 10а ---
+    function parseNikaSchedule(nika) {
+      if (!nika || !nika.CLASSES || !nika.CLASS_SCHEDULE) {
+        throw new Error('Некорректная структура данных Ника-Софт');
+      }
+
+      // 1. Поиск ID класса 10а
+      let classId = null;
+      for (const [cid, cname] of Object.entries(nika.CLASSES)) {
+        const clean = cname.toLowerCase().replace(/\s+/g, '');
+        if (clean.includes('10а') || clean.includes('10a')) {
+          classId = cid;
+          break;
+        }
+      }
+
+      if (!classId) {
+        throw new Error('Класс 10а не найден в базе школы');
+      }
+
+      // 2. Находим актуальный период (последний)
+      const periods = Object.keys(nika.CLASS_SCHEDULE).sort((a, b) => b.localeCompare(a));
+      const period = periods[0];
+      const sched = nika.CLASS_SCHEDULE[period][classId];
+      if (!sched) {
+        throw new Error('Расписание для 10а пустое в периоде ' + period);
+      }
+
+      const newSched = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [] };
+
+      for (let day = 1; day <= 6; day++) {
+        const dIdx = day - 1;
+        for (let les = 1; les <= 10; les++) {
+          const slot = `${day}${les < 10 ? '0' + les : les}`;
+          if (sched[slot]) {
+            const item = sched[slot];
+            const subjs = (item.s || []).map(id => nika.SUBJECTS[id] || id).join(', ');
+            const teachs = (item.t || []).map(id => nika.TEACHERS[id] || id).join(', ');
+            const rooms = (item.r || []).map(id => nika.ROOMS[id] ? `Каб. ${nika.ROOMS[id]}` : id).join(', ');
+
+            const subParts = [];
+            if (teachs) subParts.push(teachs);
+            if (rooms) subParts.push(rooms);
+
+            newSched[dIdx].push({
+              num: les,
+              subject: subjs || 'Урок',
+              sub: subParts.join(' • ')
+            });
+          }
+        }
+      }
+
+      // 3. Звонки школы из nika.LESSON_TIMES
+      if (nika.LESSON_TIMES) {
+        const newBells = [];
+        for (let i = 1; i <= 7; i++) {
+          if (nika.LESSON_TIMES[i] && nika.LESSON_TIMES[i].length >= 2) {
+            newBells.push({
+              num: i,
+              start: nika.LESSON_TIMES[i][0],
+              end: nika.LESSON_TIMES[i][1]
+            });
+          }
+        }
+        if (newBells.length >= 5) {
+          boyBells = newBells;
+          localStorage.setItem('nk_boy_bells', JSON.stringify(boyBells));
+        }
+      }
+
+      // 4. Проверяем замены (CLASS_EXCHANGE) для текущей даты
+      const todayDateStr = (() => {
+        const d = new Date();
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return `${dd}.${mm}.${d.getFullYear()}`;
+      })();
+
+      if (nika.CLASS_EXCHANGE && nika.CLASS_EXCHANGE[classId]) {
+        const exchanges = nika.CLASS_EXCHANGE[classId];
+        const todayEx = exchanges[todayDateStr];
+        if (todayEx) {
+          const curDayOfWeek = (() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; })();
+          if (curDayOfWeek >= 0 && curDayOfWeek <= 5) {
+            for (const [lesNumStr, exData] of Object.entries(todayEx)) {
+              const num = parseInt(lesNumStr);
+              let targetLesson = newSched[curDayOfWeek].find(x => x.num === num);
+              if (exData.s === 'F') {
+                if (targetLesson) {
+                  targetLesson.subject = `❌ ${targetLesson.subject} (ОТМЕНЕН)`;
+                }
+              } else {
+                const subjs = (exData.s || []).map(id => nika.SUBJECTS[id] || id).join(', ');
+                const teachs = (exData.t || []).map(id => nika.TEACHERS[id] || id).join(', ');
+                const rooms = (exData.r || []).map(id => nika.ROOMS[id] ? `Каб. ${nika.ROOMS[id]}` : id).join(', ');
+                const subParts = [teachs, rooms].filter(Boolean);
+
+                if (targetLesson) {
+                  targetLesson.subject = `⚡ ${subjs || targetLesson.subject} (Замена)`;
+                  if (subParts.length) targetLesson.sub = subParts.join(' • ');
+                } else {
+                  newSched[curDayOfWeek].push({
+                    num: num,
+                    subject: `⚡ ${subjs || 'Новый урок'} (Замена)`,
+                    sub: subParts.join(' • ')
+                  });
+                  newSched[curDayOfWeek].sort((a, b) => a.num - b.num);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      boySchedule = newSched;
+      localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
+      return newSched;
+    }
+
+    async function syncSchoolSchedule() {
+      const msg = document.getElementById('school-msg');
+      msg.style.color = '#60a5fa';
+      msg.textContent = '⏳ Подключаемся к сайту школы МОБУ Саракташская СОШ №2...';
+
+      const schoolCode = '17407888';
+
+      try {
+        let jsFile = '17407888_20261002114249.js';
+        try {
+          const checkResp = await fetch(`https://corsproxy.io/?${encodeURIComponent('https://raspisanie.nikasoft.ru/check/' + schoolCode + '.html')}`);
+          if (checkResp.ok) {
+            const checkText = (await checkResp.text()).trim();
+            if (checkText.endsWith('.js')) {
+              jsFile = checkText;
+            }
+          }
+        } catch (e) {
+          console.warn('Check url fallback to default jsFile:', e);
+        }
+
+        msg.textContent = `⏳ Загружаем данные (${jsFile})...`;
+
+        const nikaData = await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = `https://raspisanie.nikasoft.ru/static/public/${jsFile}?_t=${Date.now()}`;
+          script.onload = () => {
+            if (window.NIKA) {
+              resolve(window.NIKA);
+            } else {
+              reject(new Error('Объект расписания NIKA не обнаружен'));
+            }
+          };
+          script.onerror = () => {
+            fetch(`https://corsproxy.io/?${encodeURIComponent('https://raspisanie.nikasoft.ru/static/public/' + jsFile)}`)
+              .then(r => r.text())
+              .then(code => {
+                const fn = new Function(code + '; return NIKA;');
+                resolve(fn());
+              })
+              .catch(reject);
+          };
+          document.head.appendChild(script);
+        });
+
+        parseNikaSchedule(nikaData);
+
+        msg.style.color = '#34d399';
+        msg.textContent = `✓ Уроки и звонки 10а успешно синхронизированы! Экспорт: ${nikaData.EXPORT_DATE || 'актуально'}`;
+
+        if (nikaData.EXPORT_DATE) {
+          const headerDate = document.getElementById('header-date');
+          if (headerDate) headerDate.textContent = `Обновлено: ${nikaData.EXPORT_DATE} ${nikaData.EXPORT_TIME || ''}`;
+        }
+
+        updateRadar();
+      } catch (err) {
+        console.error('Ошибка синхронизации:', err);
+        msg.style.color = '#ef4444';
+        msg.textContent = 'Ошибка загрузки с сайта: ' + err.message + '. Попробуйте вставить текст страницы в поле ниже.';
+      }
+    }
+
+    function parseSchoolInput() {
+      const text = document.getElementById('school-text-field').value.trim();
+      const status = document.getElementById('school-msg');
+      if (!text) { alert('Вставьте текст или HTML со страницы расписания!'); return; }
+
+      try {
+        if (text.includes('NIKA') || text.includes('CLASS_SCHEDULE')) {
+          const start = text.indexOf('{');
+          const end = text.lastIndexOf('}') + 1;
+          const jsonStr = text.substring(start, end);
+          const nika = JSON.parse(jsonStr);
+          parseNikaSchedule(nika);
+          status.style.color = '#34d399';
+          status.textContent = '✓ Расписание 10а из вставленного кода успешно загружено!';
+          updateRadar();
+          return;
+        }
+
+        // Парсинг обычного текстового списка
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        status.style.color = '#34d399';
+        status.textContent = '✓ Текст расписания сохранен!';
+      } catch (e) {
+        status.style.color = '#ef4444';
+        status.textContent = 'Ошибка парсинга: ' + e.message;
+      }
+    }
+
+    // Инициализация
+
+    // --- ДАТА В ШАПКЕ ---
+    function updateHeaderDate() {
+      const d = new Date();
+      const months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+      const dateStr = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} г.`;
+      const timeStr = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      const el = document.getElementById('header-date');
+      if (el) el.textContent = `Обновлено: ${dateStr}, ${timeStr}`;
+    }
+
+    // --- СБРОС ЗВОНКОВ ---
+    function resetBells() {
+      if (confirm('Сбросить звонки к значениям по умолчанию?')) {
+        boyBells = JSON.parse(JSON.stringify(DEF_BOY_BELLS));
+        girlBellsMon = JSON.parse(JSON.stringify(DEF_GIRL_BELLS_MON));
+        girlBellsOther = JSON.parse(JSON.stringify(DEF_GIRL_BELLS_OTHER));
+        localStorage.removeItem('nk_boy_bells');
+        localStorage.removeItem('nk_girl_bells_mon');
+        localStorage.removeItem('nk_girl_bells_other');
+        renderSettingsView();
+        alert('Звонки сброшены!');
+      }
+    }
+
+    // --- РУЧНОЙ РЕДАКТОР УРОКОВ ---
+    function renderManualEditor() {
+      const tEl = document.getElementById('manual-target-sel');
+      const dEl = document.getElementById('manual-day-sel');
+      const cont = document.getElementById('manual-lessons-list');
+      if (!tEl || !dEl || !cont) return;
+
+      const target = tEl.value;
+      const day = parseInt(dEl.value);
+      cont.innerHTML = '';
+
+      const list = (target === 'boy' ? boySchedule[day] : girlSchedule[day]) || [];
+      list.forEach((l, idx) => {
+        const subVal = l.sub || (l.teacher ? `${l.teacher} • ${l.room || ''}` : '');
+        cont.innerHTML += `
+          <div style="display:flex; gap:6px; align-items:center; background:#11141a; padding:6px; border-radius:6px; border:1px solid #282f3d;">
+            <span style="font-weight:700; width:20px; text-align:center; color:#94a3b8; font-size:0.85rem;">${l.num}</span>
+            <input type="text" class="set-input" id="med_subj_${idx}" placeholder="Предмет" value="${l.subject || ''}" style="flex:2; padding:5px 8px; font-size:0.8rem;">
+            <input type="text" class="set-input" id="med_sub_${idx}" placeholder="${target === 'boy' ? 'Кабинет / Учитель' : 'Ауд. / Преподаватель'}" value="${subVal}" style="flex:2; padding:5px 8px; font-size:0.8rem;">
+            <button onclick="removeManualLessonRow(${idx})" style="background:#ef4444; border:none; color:#fff; border-radius:4px; width:26px; height:26px; cursor:pointer; font-weight:700;">✕</button>
+          </div>
+        `;
+      });
+    }
+
+    function addManualLessonRow() {
+      const target = document.getElementById('manual-target-sel').value;
+      const day = parseInt(document.getElementById('manual-day-sel').value);
+      const list = target === 'boy' ? boySchedule[day] : girlSchedule[day];
+      const nextNum = list.length > 0 ? list[list.length - 1].num + 1 : 1;
+      list.push({ num: nextNum, subject: "Новый предмет", sub: "Кабинет" });
+      renderManualEditor();
+    }
+
+    function removeManualLessonRow(idx) {
+      const target = document.getElementById('manual-target-sel').value;
+      const day = parseInt(document.getElementById('manual-day-sel').value);
+      const list = target === 'boy' ? boySchedule[day] : girlSchedule[day];
+      list.splice(idx, 1);
+      renderManualEditor();
+    }
+
+    function saveManualSchedule() {
+      const target = document.getElementById('manual-target-sel').value;
+      const day = parseInt(document.getElementById('manual-day-sel').value);
+      const list = target === 'boy' ? boySchedule[day] : girlSchedule[day];
+
+      list.forEach((l, idx) => {
+        const sEl = document.getElementById(`med_subj_${idx}`);
+        const bEl = document.getElementById(`med_sub_${idx}`);
+        if (sEl) l.subject = sEl.value.trim();
+        if (bEl) l.sub = bEl.value.trim();
+      });
+
+      if (target === 'boy') {
+        localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
+      } else {
+        localStorage.setItem('nk_girl_sched', JSON.stringify(girlSchedule));
+      }
+      alert('Расписание успешно сохранено!');
+      updateRadar();
+    }
+
+    // Инициализация
+    updateHeaderDate();
+    updateRadar();
+    setInterval(updateRadar, 10000);
+    setInterval(updateHeaderDate, 60000);
+  </script>
+</body>
+
+</html>
