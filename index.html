@@ -348,33 +348,72 @@
       color: var(--text-muted);
     }
 
-    .lesson-hw {
+    /* Кнопка-карандаш */
+    .pencil-btn {
+      background: #1c283a;
+      border: 1px solid #2d3e56;
+      color: #94a3b8;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-      padding-top: 6px;
-      border-top: 1px dashed rgba(255, 255, 255, 0.06);
-    }
-
-    .hw-chk {
-      width: 15px;
-      height: 15px;
-      accent-color: #2563eb;
+      justify-content: center;
+      font-size: 0.95rem;
       cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+    }
+    .pencil-btn:active {
+      transform: scale(0.92);
+    }
+    .pencil-btn.has-hw {
+      border-color: #3b82f6;
+      color: #60a5fa;
+    }
+    .pencil-btn.done {
+      border-color: #10b981;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+    }
+    .pencil-btn .hw-indicator {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3b82f6;
+    }
+    .pencil-btn.done .hw-indicator {
+      background: #10b981;
     }
 
-    .hw-text {
-      background: transparent;
-      border: none;
-      color: #cbd5e1;
-      font-size: 0.78rem;
+    /* Модальное окно */
+    .hw-modal-bg {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 9999;
+    }
+    .hw-modal-bg.hidden { display: none; }
+    .hw-modal-box {
+      background: #162032;
+      border: 1px solid #233044;
+      border-radius: 14px;
       width: 100%;
-      outline: none;
-    }
-
-    .hw-text::placeholder {
-      color: #475569;
+      max-width: 420px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 16px 24px -4px rgba(0, 0, 0, 0.6);
     }
 
     /* НАСТРОЙКИ */
@@ -676,6 +715,28 @@
       </div>
       <div class="nika-footer">© Котек</div>
     </section>
+
+    <!-- Окно изменения ДЗ -->
+    <div id="hw-modal" class="hw-modal-bg hidden" onclick="if(event.target===this) closeHwModal()">
+      <div class="hw-modal-box">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div id="hw-modal-title" style="font-size: 1rem; font-weight: 700; color: #f1f5f9;">Урок</div>
+          <button type="button" onclick="closeHwModal()" style="background: none; border: none; color: #94a3b8; font-size: 1.3rem; cursor: pointer;">✕</button>
+        </div>
+
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #f1f5f9; cursor: pointer; user-select: none;">
+          <input type="checkbox" id="hw-modal-chk" style="accent-color: #10b981; width: 18px; height: 18px; cursor: pointer;">
+          <span>Сделано</span>
+        </label>
+
+        <textarea id="hw-modal-text" style="width: 100%; background: #090d14; border: 1px solid #26354a; color: #f1f5f9; padding: 10px; border-radius: 8px; font-size: 0.88rem; min-height: 85px; outline: none; resize: vertical;" placeholder="Напиши домашнее задание..."></textarea>
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button type="button" onclick="closeHwModal()" style="background: #233044; border: none; color: #94a3b8; padding: 8px 14px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Отмена</button>
+          <button type="button" onclick="saveHwModal()" style="background: #2563eb; border: none; color: #ffffff; padding: 8px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Сохранить</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -863,6 +924,66 @@
       renderScheduleView();
     }
 
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // --- МОДАЛЬНОЕ ОКНО ДЗ И КНОПКА-КАРАНДАШ ---
+    let activeHw = { target: null, day: null, num: null };
+
+    function openHwModal(target, day, num, subjectName) {
+      activeHw = { target, day, num };
+      const titleEl = document.getElementById('hw-modal-title');
+      if (titleEl) titleEl.textContent = `${num}. ${subjectName}`;
+
+      const chkVal = localStorage.getItem(`nk_chk_${target}_${day}_${num}`);
+      const chkEl = document.getElementById('hw-modal-chk');
+      if (chkEl) chkEl.checked = (chkVal === 'true' || chkVal === '1');
+
+      const txtEl = document.getElementById('hw-modal-text');
+      if (txtEl) {
+        txtEl.value = localStorage.getItem(`nk_hw_${target}_${day}_${num}`) || '';
+      }
+
+      const modal = document.getElementById('hw-modal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        if (txtEl) setTimeout(() => txtEl.focus(), 50);
+      }
+    }
+
+    function closeHwModal() {
+      const modal = document.getElementById('hw-modal');
+      if (modal) modal.classList.add('hidden');
+      activeHw = { target: null, day: null, num: null };
+    }
+
+    function saveHwModal() {
+      if (activeHw.target === null) return;
+      const { target, day, num } = activeHw;
+      const text = (document.getElementById('hw-modal-text')?.value || '').trim();
+      const done = document.getElementById('hw-modal-chk')?.checked;
+
+      const hwKey = `nk_hw_${target}_${day}_${num}`;
+      const chkKey = `nk_chk_${target}_${day}_${num}`;
+
+      if (text) {
+        localStorage.setItem(hwKey, text);
+        localStorage.setItem(chkKey, done ? 'true' : 'false');
+      } else {
+        localStorage.removeItem(hwKey);
+        localStorage.removeItem(chkKey);
+      }
+
+      closeHwModal();
+      renderScheduleView();
+    }
+
     function renderScheduleView() {
       document.querySelectorAll('.day-pill').forEach(p => {
         p.classList.toggle('active', parseInt(p.dataset.d) === selectedDay);
@@ -881,7 +1002,7 @@
       const bells = isBoy ? boyBells : (selectedDay === 0 ? girlBellsMon : girlBellsOther);
 
       if (lessons.length === 0) {
-        cont.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted); font-size:0.9rem;">В этот день занятий нет</div>';
+        cont.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted); font-size:0.9rem;">В этот день занятий нет 🎉</div>';
         return;
       }
 
@@ -890,29 +1011,40 @@
         const isNow = selectedDay === realDay && bell && curM >= toMin(bell.start) && curM <= toMin(bell.end);
         const hwKey = `nk_hw_${activeSchedTarget}_${selectedDay}_${l.num}`;
         const chkKey = `nk_chk_${activeSchedTarget}_${selectedDay}_${l.num}`;
+        const hwText = localStorage.getItem(hwKey) || '';
+        const isDone = localStorage.getItem(chkKey) === 'true' || localStorage.getItem(chkKey) === '1';
+        const hasHw = hwText.trim().length > 0;
+        const safeSubject = (l.subject || 'Урок').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
         const el = document.createElement('div');
         el.className = `lesson-item ${isNow ? 'is-now' : ''}`;
         el.innerHTML = `
-          <div class="lesson-top-row">
-            <div class="lesson-num">${l.num}</div>
-            <div class="lesson-time-box">
-              <span class="lesson-time">${bell ? bell.start : '--:--'}</span>
-              <span class="lesson-time">${bell ? bell.end : '--:--'}</span>
+          <div class="lesson-top-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0;">
+              <div class="lesson-num">${l.num}</div>
+              <div class="lesson-time-box">
+                <span class="lesson-time">${bell ? bell.start : '--:--'}</span>
+                <span class="lesson-time">${bell ? bell.end : '--:--'}</span>
+              </div>
+              <div class="lesson-info" style="min-width: 0; flex: 1;">
+                <div class="lesson-name">${escapeHtml(l.subject || 'Урок')}</div>
+                <div class="lesson-subinfo">${escapeHtml(l.sub || (l.teacher ? `${l.teacher} • ${l.room || ''}` : ''))}</div>
+                ${hasHw ? `<div style="font-size: 0.76rem; margin-top: 3px; color: ${isDone ? '#34d399' : '#60a5fa'}; line-height: 1.25; word-break: break-word;">${isDone ? '✓ ' : '📝 '}${escapeHtml(hwText)}</div>` : ''}
+              </div>
             </div>
-            <div class="lesson-info">
-              <div class="lesson-name">${l.subject}</div>
-              <div class="lesson-subinfo">${l.sub || (l.teacher ? `${l.teacher} • ${l.room || ''}` : '')}</div>
-            </div>
-          </div>
-          <div class="lesson-hw">
-            <input type="checkbox" class="hw-chk" ${localStorage.getItem(chkKey) === '1' ? 'checked' : ''} onchange="localStorage.setItem('${chkKey}', this.checked ? '1' : '0')">
-            <input type="text" class="hw-text" placeholder="ДЗ или заметка к уроку..." value="${localStorage.getItem(hwKey) || ''}" onchange="localStorage.setItem('${hwKey}', this.value)">
+            <button class="pencil-btn ${hasHw ? 'has-hw' : ''} ${isDone ? 'done' : ''}" 
+                    title="Задать ДЗ" 
+                    onclick="openHwModal('${activeSchedTarget}', ${selectedDay}, ${l.num}, '${safeSubject}')">
+              ✏️
+              ${hasHw ? '<div class="hw-indicator"></div>' : ''}
+            </button>
           </div>
         `;
         cont.appendChild(el);
       });
     }
+
+    const renderDaySchedule = renderScheduleView;
 
     // --- СИНХРОННЫЙ РАДАР (КТО ГДЕ И ПЕРЕМЕНЫ) ---
     function updateRadar() {
@@ -1227,66 +1359,126 @@
       return newSched;
     }
 
+    // 1. Починенная синхронизация школы без падений на Unexpected token ':'
     async function syncSchoolSchedule() {
       const msg = document.getElementById('school-msg');
-      msg.style.color = '#60a5fa';
-      msg.textContent = '⏳ Подключаемся к сайту школы МОБУ Саракташская СОШ №2...';
+      if (msg) {
+        msg.style.color = '#60a5fa';
+        msg.textContent = '⏳ Подключаемся к сайту школы МОБУ СОШ №2...';
+      }
 
       const schoolCode = '17407888';
+      let jsFile = '17407888_20261009074443.js';
 
       try {
-        let jsFile = '17407888_20261002114249.js';
+        // Проверяем актуальное имя JS-файла
         try {
-          const checkResp = await fetch(`https://corsproxy.io/?${encodeURIComponent('https://raspisanie.nikasoft.ru/check/' + schoolCode + '.html')}`);
-          if (checkResp.ok) {
-            const checkText = (await checkResp.text()).trim();
-            if (checkText.endsWith('.js')) {
-              jsFile = checkText;
+          const chk = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://raspisanie.nikasoft.ru/check/' + schoolCode + '.html')}`);
+          if (chk.ok) {
+            const txt = (await chk.text()).trim();
+            if (txt.endsWith('.js')) jsFile = txt;
+          }
+        } catch (e) {}
+
+        if (msg) msg.textContent = `⏳ Загружаем расписание (${jsFile})...`;
+        const scriptTarget = `https://raspisanie.nikasoft.ru/static/public/${jsFile}?_t=${Date.now()}`;
+        
+        // 1. Сначала пробуем прямой тег <script> (в браузере тег <script> обходит CORS и качает напрямую без прокси)
+        let data = null;
+        try {
+          data = await new Promise((resolve) => {
+            const s = document.createElement('script');
+            s.src = scriptTarget;
+            s.onload = () => {
+              const res = window.NIKA || (typeof NIKA !== 'undefined' ? NIKA : null);
+              resolve(res);
+            };
+            s.onerror = () => resolve(null);
+            document.head.appendChild(s);
+            setTimeout(() => resolve(null), 3500);
+          });
+        } catch (e) {}
+
+        // 2. Если прямой script не сработал (например, при строгой CSP), пробуем прокси
+        if (!data) {
+          let code = '';
+          try {
+            const r1 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(scriptTarget)}`);
+            if (r1.ok) code = await r1.text();
+          } catch (e) {}
+
+          // Запасной запрос через corsproxy
+          if (!code || code.trim().startsWith('{') || code.trim().startsWith('<')) {
+            try {
+              const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(scriptTarget)}`);
+              if (r2.ok) code = await r2.text();
+            } catch (e) {}
+          }
+
+          // Защита от служебных JSON ошибок прокси
+          if (!code || code.trim().startsWith('{') || code.trim().startsWith('<') || !code.includes('NIKA')) {
+            throw new Error('Прокси временно заблокирован или перегружен. Вставьте текст страницы вручную.');
+          }
+
+          // Выполняем скрипт расписания
+          const runScript = new Function(code + '; return (window.NIKA || (typeof NIKA !== "undefined" ? NIKA : null));');
+          data = runScript();
+        }
+
+        if (!data) throw new Error('Данные NIKA не найдены');
+
+        // Обрабатываем расписание
+        if (data.CLASS_SCHEDULE && data.CLASSES) {
+          parseNikaSchedule(data);
+        } else if (data.LESSONS && data.CLASSES) {
+          let classId = null;
+          for (const [id, c] of Object.entries(data.CLASSES)) {
+            const cname = typeof c === 'string' ? c : (c.name || '');
+            if (cname && cname.toLowerCase().includes('10а')) {
+              classId = id;
+              break;
             }
           }
-        } catch (e) {
-          console.warn('Check url fallback to default jsFile:', e);
+
+          const newSched = { "0":[], "1":[], "2":[], "3":[], "4":[], "5":[] };
+          if (classId) {
+            data.LESSONS.forEach(l => {
+              if (l.class_id == classId && l.day >= 0 && l.day <= 5) {
+                const subj = data.SUBJECTS?.[l.subject_id]?.name || (typeof data.SUBJECTS?.[l.subject_id] === 'string' ? data.SUBJECTS[l.subject_id] : 'Урок');
+                const room = data.ROOMS?.[l.room_id]?.name || (typeof data.ROOMS?.[l.room_id] === 'string' ? `Каб. ${data.ROOMS[l.room_id]}` : '');
+                const teacher = data.TEACHERS?.[l.teacher_id]?.name || (typeof data.TEACHERS?.[l.teacher_id] === 'string' ? data.TEACHERS[l.teacher_id] : '');
+                newSched[l.day].push({
+                  num: l.num || 1,
+                  subject: subj,
+                  sub: [teacher, room].filter(Boolean).join(' • '),
+                  time: data.LESSON_TIMES?.[l.num - 1] ? `${data.LESSON_TIMES[l.num - 1].s}-${data.LESSON_TIMES[l.num - 1].e}` : ''
+                });
+              }
+            });
+            Object.keys(newSched).forEach(d => newSched[d].sort((a, b) => a.num - b.num));
+          }
+
+          boySchedule = newSched;
+          localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
+        } else {
+          parseNikaSchedule(data);
         }
 
-        msg.textContent = `⏳ Загружаем данные (${jsFile})...`;
-
-        const nikaData = await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = `https://raspisanie.nikasoft.ru/static/public/${jsFile}?_t=${Date.now()}`;
-          script.onload = () => {
-            if (window.NIKA) {
-              resolve(window.NIKA);
-            } else {
-              reject(new Error('Объект расписания NIKA не обнаружен'));
-            }
-          };
-          script.onerror = () => {
-            fetch(`https://corsproxy.io/?${encodeURIComponent('https://raspisanie.nikasoft.ru/static/public/' + jsFile)}`)
-              .then(r => r.text())
-              .then(code => {
-                const fn = new Function(code + '; return NIKA;');
-                resolve(fn());
-              })
-              .catch(reject);
-          };
-          document.head.appendChild(script);
-        });
-
-        parseNikaSchedule(nikaData);
-
-        msg.style.color = '#34d399';
-        msg.textContent = `✓ Уроки и звонки 10а успешно синхронизированы! Экспорт: ${nikaData.EXPORT_DATE || 'актуально'}`;
-
-        if (nikaData.EXPORT_DATE) {
+        if (msg) {
+          msg.style.color = '#34d399';
+          msg.textContent = '✓ 10а класс успешно синхронизирован с сайта школы!';
+        }
+        if (data.EXPORT_DATE) {
           const headerDate = document.getElementById('header-date');
-          if (headerDate) headerDate.textContent = `Обновлено: ${nikaData.EXPORT_DATE} ${nikaData.EXPORT_TIME || ''}`;
+          if (headerDate) headerDate.textContent = `Обновлено: ${data.EXPORT_DATE} ${data.EXPORT_TIME || ''}`;
         }
-
+        renderScheduleView();
         updateRadar();
       } catch (err) {
-        console.error('Ошибка синхронизации:', err);
-        msg.style.color = '#ef4444';
-        msg.textContent = 'Ошибка загрузки с сайта: ' + err.message + '. Попробуйте вставить текст страницы в поле ниже.';
+        if (msg) {
+          msg.style.color = '#ef4444';
+          msg.textContent = 'Ошибка: ' + err.message;
+        }
       }
     }
 
