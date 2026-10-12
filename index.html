@@ -933,6 +933,11 @@
         .replace(/"/g, '&quot;');
     }
 
+    function escapeAttr(str) {
+      if (!str) return '';
+      return escapeHtml(str).replace(/'/g, '&#39;');
+    }
+
     // --- МОДАЛЬНОЕ ОКНО ДЗ И КНОПКА-КАРАНДАШ ---
     let activeHw = { target: null, day: null, num: null };
 
@@ -963,6 +968,7 @@
       activeHw = { target: null, day: null, num: null };
     }
 
+    // Сохранение ДЗ: галочка сохраняется независимо от наличия текста
     function saveHwModal() {
       if (activeHw.target === null) return;
       const { target, day, num } = activeHw;
@@ -972,16 +978,70 @@
       const hwKey = `nk_hw_${target}_${day}_${num}`;
       const chkKey = `nk_chk_${target}_${day}_${num}`;
 
+      // Текст задания
       if (text) {
         localStorage.setItem(hwKey, text);
-        localStorage.setItem(chkKey, done ? 'true' : 'false');
       } else {
         localStorage.removeItem(hwKey);
+      }
+
+      // Чекбокс выполнения
+      if (done) {
+        localStorage.setItem(chkKey, 'true');
+      } else {
         localStorage.removeItem(chkKey);
       }
 
       closeHwModal();
-      renderScheduleView();
+      renderDaySchedule();
+    }
+
+    // Отрисовка списка: учитывает галочку даже без текста ДЗ
+    function renderList(target, list, containerId, badgeId) {
+      const container = document.getElementById(containerId);
+      const badge = document.getElementById(badgeId);
+      if (badge && list) badge.textContent = `${list.length} ${target === 'boy' ? 'уроков' : 'пар'}`;
+
+      if (!container) return;
+
+      if (!list || list.length === 0) {
+        container.innerHTML = `<div class="lesson-item empty" style="padding: 16px; text-align: center; color: #64748b;">Занятий нет — выходной 🎉</div>`;
+        return;
+      }
+
+      const curDay = typeof currentDay !== 'undefined' ? currentDay : selectedDay;
+
+      container.innerHTML = list.map(item => {
+        const hwKey = `nk_hw_${target}_${curDay}_${item.num}`;
+        const chkKey = `nk_chk_${target}_${curDay}_${item.num}`;
+        const hwText = localStorage.getItem(hwKey) || '';
+        const isDone = localStorage.getItem(chkKey) === 'true';
+        const hasHw = hwText.trim().length > 0;
+
+        let statusPreview = '';
+        if (hasHw) {
+          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: ${isDone ? '#34d399' : '#60a5fa'}; line-height: 1.25;">${isDone ? '✓ ' : '📝 '}${escapeHtml(hwText)}</div>`;
+        } else if (isDone) {
+          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: #34d399; line-height: 1.25;">✓ Выполнено</div>`;
+        }
+
+        return `
+          <div class="lesson-item" style="padding: 10px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1c283a;">
+            <div style="width: 22px; font-weight: 700; font-size: 0.9rem; color: #64748b; text-align: center;">${item.num}</div>
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
+              <div style="font-size: 0.92rem; font-weight: 600; color: #f1f5f9;">${escapeHtml(item.subject || 'Урок')}</div>
+              <div style="font-size: 0.78rem; color: #8b9bb4;">${escapeHtml(item.sub || '')} ${item.time ? '• ' + escapeHtml(item.time) : ''}</div>
+              ${statusPreview}
+            </div>
+            <button class="pencil-btn ${hasHw || isDone ? 'has-hw' : ''} ${isDone ? 'done' : ''}" 
+                    title="Задать ДЗ" 
+                    onclick="openHwModal('${target}', ${curDay}, ${item.num}, '${escapeAttr(item.subject || 'Урок')}')">
+              ✏️
+              ${hasHw || isDone ? '<div class="hw-indicator"></div>' : ''}
+            </button>
+          </div>
+        `;
+      }).join('');
     }
 
     function renderScheduleView() {
@@ -1016,6 +1076,13 @@
         const hasHw = hwText.trim().length > 0;
         const safeSubject = (l.subject || 'Урок').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
+        let statusPreview = '';
+        if (hasHw) {
+          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: ${isDone ? '#34d399' : '#60a5fa'}; line-height: 1.25; word-break: break-word;">${isDone ? '✓ ' : '📝 '}${escapeHtml(hwText)}</div>`;
+        } else if (isDone) {
+          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: #34d399; line-height: 1.25;">✓ Выполнено</div>`;
+        }
+
         const el = document.createElement('div');
         el.className = `lesson-item ${isNow ? 'is-now' : ''}`;
         el.innerHTML = `
@@ -1029,14 +1096,14 @@
               <div class="lesson-info" style="min-width: 0; flex: 1;">
                 <div class="lesson-name">${escapeHtml(l.subject || 'Урок')}</div>
                 <div class="lesson-subinfo">${escapeHtml(l.sub || (l.teacher ? `${l.teacher} • ${l.room || ''}` : ''))}</div>
-                ${hasHw ? `<div style="font-size: 0.76rem; margin-top: 3px; color: ${isDone ? '#34d399' : '#60a5fa'}; line-height: 1.25; word-break: break-word;">${isDone ? '✓ ' : '📝 '}${escapeHtml(hwText)}</div>` : ''}
+                ${statusPreview}
               </div>
             </div>
-            <button class="pencil-btn ${hasHw ? 'has-hw' : ''} ${isDone ? 'done' : ''}" 
+            <button class="pencil-btn ${hasHw || isDone ? 'has-hw' : ''} ${isDone ? 'done' : ''}" 
                     title="Задать ДЗ" 
                     onclick="openHwModal('${activeSchedTarget}', ${selectedDay}, ${l.num}, '${safeSubject}')">
               ✏️
-              ${hasHw ? '<div class="hw-indicator"></div>' : ''}
+              ${hasHw || isDone ? '<div class="hw-indicator"></div>' : ''}
             </button>
           </div>
         `;
@@ -1359,7 +1426,31 @@
       return newSched;
     }
 
-    // 1. Починенная синхронизация школы без падений на Unexpected token ':'
+    // Вспомогательная функция перебора прокси
+    async function fetchViaProxies(targetUrl) {
+      const proxyList = [
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+        `https://thingproxy.freeboard.io/fetch/${targetUrl}`
+      ];
+
+      for (const pUrl of proxyList) {
+        try {
+          const res = await fetch(pUrl);
+          if (!res.ok) continue;
+          const text = await res.text();
+          // Проверяем, что ответ не пустой и не является служебной ошибкой
+          if (text && !text.trim().startsWith('{') && !text.trim().startsWith('<html') && !text.includes('Too Many Requests')) {
+            return text;
+          }
+        } catch (e) {
+          // Пробуем следующий прокси
+        }
+      }
+      throw new Error('Все прокси-серверы временно недоступны. Вставьте текст вручную ниже.');
+    }
+
     async function syncSchoolSchedule() {
       const msg = document.getElementById('school-msg');
       if (msg) {
@@ -1368,101 +1459,65 @@
       }
 
       const schoolCode = '17407888';
-      let jsFile = '17407888_20261009074443.js';
+      let jsFile = '17407888_20261002114249.js';
 
       try {
-        // Проверяем актуальное имя JS-файла
+        // 1. Проверяем имя актуального файла
         try {
-          const chk = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://raspisanie.nikasoft.ru/check/' + schoolCode + '.html')}`);
-          if (chk.ok) {
-            const txt = (await chk.text()).trim();
-            if (txt.endsWith('.js')) jsFile = txt;
+          const checkTxt = await fetchViaProxies(`https://raspisanie.nikasoft.ru/check/${schoolCode}.html`);
+          if (checkTxt && checkTxt.trim().endsWith('.js')) {
+            jsFile = checkTxt.trim();
           }
-        } catch (e) {}
-
-        if (msg) msg.textContent = `⏳ Загружаем расписание (${jsFile})...`;
-        const scriptTarget = `https://raspisanie.nikasoft.ru/static/public/${jsFile}?_t=${Date.now()}`;
-        
-        // 1. Сначала пробуем прямой тег <script> (в браузере тег <script> обходит CORS и качает напрямую без прокси)
-        let data = null;
-        try {
-          data = await new Promise((resolve) => {
-            const s = document.createElement('script');
-            s.src = scriptTarget;
-            s.onload = () => {
-              const res = window.NIKA || (typeof NIKA !== 'undefined' ? NIKA : null);
-              resolve(res);
-            };
-            s.onerror = () => resolve(null);
-            document.head.appendChild(s);
-            setTimeout(() => resolve(null), 3500);
-          });
-        } catch (e) {}
-
-        // 2. Если прямой script не сработал (например, при строгой CSP), пробуем прокси
-        if (!data) {
-          let code = '';
-          try {
-            const r1 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(scriptTarget)}`);
-            if (r1.ok) code = await r1.text();
-          } catch (e) {}
-
-          // Запасной запрос через corsproxy
-          if (!code || code.trim().startsWith('{') || code.trim().startsWith('<')) {
-            try {
-              const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(scriptTarget)}`);
-              if (r2.ok) code = await r2.text();
-            } catch (e) {}
-          }
-
-          // Защита от служебных JSON ошибок прокси
-          if (!code || code.trim().startsWith('{') || code.trim().startsWith('<') || !code.includes('NIKA')) {
-            throw new Error('Прокси временно заблокирован или перегружен. Вставьте текст страницы вручную.');
-          }
-
-          // Выполняем скрипт расписания
-          const runScript = new Function(code + '; return (window.NIKA || (typeof NIKA !== "undefined" ? NIKA : null));');
-          data = runScript();
+        } catch (e) {
+          console.warn('Используем резервное имя JS-файла');
         }
 
-        if (!data) throw new Error('Данные NIKA не найдены');
+        if (msg) msg.textContent = `⏳ Загружаем расписание (${jsFile})...`;
 
-        // Обрабатываем расписание
-        if (data.CLASS_SCHEDULE && data.CLASSES) {
-          parseNikaSchedule(data);
-        } else if (data.LESSONS && data.CLASSES) {
-          let classId = null;
+        // 2. Скачиваем сам скрипт через мульти-прокси
+        const scriptTarget = `https://raspisanie.nikasoft.ru/static/public/${jsFile}?_t=${Date.now()}`;
+        const code = await fetchViaProxies(scriptTarget);
+
+        if (!code || !code.includes('NIKA')) {
+          throw new Error('Файл расписания поврежден или заблокирован сервером.');
+        }
+
+        // 3. Выполняем скрипт расписания
+        const runScript = new Function(code + '; return (window.NIKA || (typeof NIKA !== "undefined" ? NIKA : null));');
+        const data = runScript();
+        if (!data) throw new Error('Объект NIKA не найден в файле');
+
+        // Ищем 10а класс
+        let classId = null;
+        if (data.CLASSES) {
           for (const [id, c] of Object.entries(data.CLASSES)) {
-            const cname = typeof c === 'string' ? c : (c.name || '');
-            if (cname && cname.toLowerCase().includes('10а')) {
+            if (c.name && c.name.toLowerCase().includes('10а')) {
               classId = id;
               break;
             }
           }
-
-          const newSched = { "0":[], "1":[], "2":[], "3":[], "4":[], "5":[] };
-          if (classId) {
-            data.LESSONS.forEach(l => {
-              if (l.class_id == classId && l.day >= 0 && l.day <= 5) {
-                const subj = data.SUBJECTS?.[l.subject_id]?.name || (typeof data.SUBJECTS?.[l.subject_id] === 'string' ? data.SUBJECTS[l.subject_id] : 'Урок');
-                const room = data.ROOMS?.[l.room_id]?.name || (typeof data.ROOMS?.[l.room_id] === 'string' ? `Каб. ${data.ROOMS[l.room_id]}` : '');
-                const teacher = data.TEACHERS?.[l.teacher_id]?.name || (typeof data.TEACHERS?.[l.teacher_id] === 'string' ? data.TEACHERS[l.teacher_id] : '');
-                newSched[l.day].push({
-                  num: l.num || 1,
-                  subject: subj,
-                  sub: [teacher, room].filter(Boolean).join(' • '),
-                  time: data.LESSON_TIMES?.[l.num - 1] ? `${data.LESSON_TIMES[l.num - 1].s}-${data.LESSON_TIMES[l.num - 1].e}` : ''
-                });
-              }
-            });
-            Object.keys(newSched).forEach(d => newSched[d].sort((a, b) => a.num - b.num));
-          }
-
-          boySchedule = newSched;
-          localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
-        } else {
-          parseNikaSchedule(data);
         }
+
+        const newSched = { "0":[], "1":[], "2":[], "3":[], "4":[], "5":[] };
+        if (data.LESSONS && classId) {
+          data.LESSONS.forEach(l => {
+            if (l.class_id == classId && l.day >= 0 && l.day <= 5) {
+              const subj = data.SUBJECTS?.[l.subject_id]?.name || 'Урок';
+              const room = data.ROOMS?.[l.room_id]?.name || '';
+              const teacher = data.TEACHERS?.[l.teacher_id]?.name || '';
+              newSched[l.day].push({
+                num: l.num || 1,
+                subject: subj,
+                sub: [room, teacher].filter(Boolean).join(' • '),
+                time: data.LESSON_TIMES?.[l.num - 1] ? `${data.LESSON_TIMES[l.num - 1].s}-${data.LESSON_TIMES[l.num - 1].e}` : ''
+              });
+            }
+          });
+          Object.keys(newSched).forEach(d => newSched[d].sort((a, b) => a.num - b.num));
+        }
+
+        boySchedule = newSched;
+        localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
 
         if (msg) {
           msg.style.color = '#34d399';
@@ -1472,8 +1527,8 @@
           const headerDate = document.getElementById('header-date');
           if (headerDate) headerDate.textContent = `Обновлено: ${data.EXPORT_DATE} ${data.EXPORT_TIME || ''}`;
         }
-        renderScheduleView();
-        updateRadar();
+        renderDaySchedule();
+        if (typeof updateRadar === 'function') updateRadar();
       } catch (err) {
         if (msg) {
           msg.style.color = '#ef4444';
