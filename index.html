@@ -731,7 +731,8 @@
 
         <textarea id="hw-modal-text" style="width: 100%; background: #090d14; border: 1px solid #26354a; color: #f1f5f9; padding: 10px; border-radius: 8px; font-size: 0.88rem; min-height: 85px; outline: none; resize: vertical;" placeholder="Напиши домашнее задание..."></textarea>
 
-        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;">
+          <button type="button" onclick="resetHwModal()" style="background: #233044; border: none; color: #94a3b8; padding: 5px 8px; border-radius: 8px; font-size: 0.72rem; cursor: pointer; margin-right: auto; align-self: center;">Сбросить ДЗ</button>
           <button type="button" onclick="closeHwModal()" style="background: #233044; border: none; color: #94a3b8; padding: 8px 14px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Отмена</button>
           <button type="button" onclick="saveHwModal()" style="background: #2563eb; border: none; color: #ffffff; padding: 8px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Сохранить</button>
         </div>
@@ -966,6 +967,13 @@
       const modal = document.getElementById('hw-modal');
       if (modal) modal.classList.add('hidden');
       activeHw = { target: null, day: null, num: null };
+    }
+
+    function resetHwModal() {
+      if (activeHw.target === null) return;
+      document.getElementById('hw-modal-text').value = '';
+      document.getElementById('hw-modal-chk').checked = false;
+      saveHwModal();
     }
 
     // Сохранение ДЗ: галочка сохраняется независимо от наличия текста
@@ -1316,7 +1324,7 @@
       let classId = null;
       for (const [cid, cname] of Object.entries(nika.CLASSES)) {
         const clean = cname.toLowerCase().replace(/\s+/g, '');
-        if (clean.includes('10а') || clean.includes('10a')) {
+        if (clean === '10а' || clean === '10a') {
           classId = cid;
           break;
         }
@@ -1327,9 +1335,9 @@
       }
 
       // 2. Находим актуальный период (последний)
-      const periods = Object.keys(nika.CLASS_SCHEDULE).sort((a, b) => b.localeCompare(a));
+      const periods = Object.keys(nika.CLASS_SCHEDULE).sort((a, b) => Number(b) - Number(a));
       const period = periods[0];
-      const sched = nika.CLASS_SCHEDULE[period][classId];
+      const sched = nika.CLASS_SCHEDULE[period]?.[classId];
       if (!sched) {
         throw new Error('Расписание для 10а пустое в периоде ' + period);
       }
@@ -1338,7 +1346,7 @@
 
       for (let day = 1; day <= 6; day++) {
         const dIdx = day - 1;
-        for (let les = 1; les <= 10; les++) {
+        for (let les = 1; les <= (Number(nika.LESSONSINDAY) || 14); les++) {
           const slot = `${day}${les < 10 ? '0' + les : les}`;
           if (sched[slot]) {
             const item = sched[slot];
@@ -1359,10 +1367,14 @@
         }
       }
 
+      if (!Object.values(newSched).some(lessons => lessons.length)) {
+        throw new Error('Расписание для 10а пустое в периоде ' + period);
+      }
+
       // 3. Звонки школы из nika.LESSON_TIMES
       if (nika.LESSON_TIMES) {
         const newBells = [];
-        for (let i = 1; i <= 7; i++) {
+        for (let i = 1; i <= (Number(nika.LESSONSINDAY) || 14); i++) {
           if (nika.LESSON_TIMES[i] && nika.LESSON_TIMES[i].length >= 2) {
             newBells.push({
               num: i,
@@ -1426,32 +1438,62 @@
       return newSched;
     }
 
-    // Вспомогательная функция перебора прокси
-    async function fetchViaProxies(targetUrl) {
-      const proxyList = [
-        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-        `https://thingproxy.freeboard.io/fetch/${targetUrl}`
-      ];
-
-      for (const pUrl of proxyList) {
-        try {
-          const res = await fetch(pUrl);
-          if (!res.ok) continue;
-          const text = await res.text();
-          // Проверяем, что ответ не пустой и не является служебной ошибкой
-          if (text && !text.trim().startsWith('{') && !text.trim().startsWith('<html') && !text.includes('Too Many Requests')) {
-            return text;
-          }
-        } catch (e) {
-          // Пробуем следующий прокси
-        }
+    // Ника публикует JSON внутри JS-файла; выполнять полученный код не нужно.
+    function decodeNikaData(code) {
+      const start = code.indexOf('{');
+      const end = code.lastIndexOf('}');
+      if (start < 0 || end < start) throw new Error('Объект NIKA не найден в файле');
+      const data = JSON.parse(code.slice(start, end + 1));
+      if (!data || !data.CLASSES || !data.CLASS_SCHEDULE) {
+        throw new Error('Некорректная структура данных Ника-Софт');
       }
-      throw new Error('Все прокси-серверы временно недоступны. Вставьте текст вручную ниже.');
+      return data;
     }
 
+    // Первый корректный ответ выигрывает; зависшие и проигравшие запросы отменяются.
+    async function fetchViaProxies(targetUrl, validate = text => Boolean(text.trim())) {
+      const proxyList = [
+        { url: targetUrl },
+        { url: `https://proxy.cors.dev/${targetUrl}` },
+        { url: `https://cors.tools/proxy?url=${encodeURIComponent(targetUrl)}` },
+        { url: `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`, json: true },
+        { url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}` }
+      ];
+      const controllers = proxyList.map(() => new AbortController());
+      return new Promise((resolve, reject) => {
+        let remaining = proxyList.length;
+        let settled = false;
+        proxyList.forEach(async (proxy, index) => {
+          const controller = controllers[index];
+          const timer = setTimeout(() => controller.abort(), 12000);
+          try {
+            const res = await fetch(proxy.url, { signal: controller.signal, cache: 'no-store', credentials: 'omit' });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const body = proxy.json ? await res.json() : null;
+            if (body?.status?.http_code && Number(body.status.http_code) >= 400) throw new Error('Proxy HTTP error');
+            const text = proxy.json ? body.contents : await res.text();
+            if (typeof text !== 'string' || !validate(text)) throw new Error('Invalid proxy response');
+            if (!settled) {
+              settled = true;
+              resolve(text);
+              controllers.forEach(other => other.abort());
+            }
+          } catch (e) {
+            // Ошибки CORS, таймауты и служебные ответы не считаются расписанием.
+          } finally {
+            clearTimeout(timer);
+            if (--remaining === 0 && !settled) {
+              reject(new Error('Все прокси-серверы временно недоступны. Вставьте текст вручную ниже.'));
+            }
+          }
+        });
+      });
+    }
+
+    let schoolSyncInProgress = false;
     async function syncSchoolSchedule() {
+      if (schoolSyncInProgress) return;
+      schoolSyncInProgress = true;
       const msg = document.getElementById('school-msg');
       if (msg) {
         msg.style.color = '#60a5fa';
@@ -1459,65 +1501,32 @@
       }
 
       const schoolCode = '17407888';
-      let jsFile = '17407888_20261002114249.js';
+      const filePattern = new RegExp(`\\b${schoolCode}_\\d+\\.js\\b`);
+      let jsFile;
 
       try {
         // 1. Проверяем имя актуального файла
         try {
-          const checkTxt = await fetchViaProxies(`https://raspisanie.nikasoft.ru/check/${schoolCode}.html`);
-          if (checkTxt && checkTxt.trim().endsWith('.js')) {
-            jsFile = checkTxt.trim();
-          }
+          const checkTxt = await fetchViaProxies(`https://raspisanie.nikasoft.ru/check/${schoolCode}.html`,
+            text => new RegExp(`^${schoolCode}_\\d+\\.js$`).test(text.trim()));
+          jsFile = checkTxt.trim();
         } catch (e) {
-          console.warn('Используем резервное имя JS-файла');
+          // Если check недоступен, актуальное имя есть в HTML страницы школы.
+          const page = await fetchViaProxies(`https://raspisanie.nikasoft.ru/${schoolCode}.html`,
+            text => filePattern.test(text));
+          jsFile = page.match(filePattern)[0];
         }
 
         if (msg) msg.textContent = `⏳ Загружаем расписание (${jsFile})...`;
 
         // 2. Скачиваем сам скрипт через мульти-прокси
         const scriptTarget = `https://raspisanie.nikasoft.ru/static/public/${jsFile}?_t=${Date.now()}`;
-        const code = await fetchViaProxies(scriptTarget);
-
-        if (!code || !code.includes('NIKA')) {
-          throw new Error('Файл расписания поврежден или заблокирован сервером.');
-        }
-
-        // 3. Выполняем скрипт расписания
-        const runScript = new Function(code + '; return (window.NIKA || (typeof NIKA !== "undefined" ? NIKA : null));');
-        const data = runScript();
-        if (!data) throw new Error('Объект NIKA не найден в файле');
-
-        // Ищем 10а класс
-        let classId = null;
-        if (data.CLASSES) {
-          for (const [id, c] of Object.entries(data.CLASSES)) {
-            if (c.name && c.name.toLowerCase().includes('10а')) {
-              classId = id;
-              break;
-            }
-          }
-        }
-
-        const newSched = { "0":[], "1":[], "2":[], "3":[], "4":[], "5":[] };
-        if (data.LESSONS && classId) {
-          data.LESSONS.forEach(l => {
-            if (l.class_id == classId && l.day >= 0 && l.day <= 5) {
-              const subj = data.SUBJECTS?.[l.subject_id]?.name || 'Урок';
-              const room = data.ROOMS?.[l.room_id]?.name || '';
-              const teacher = data.TEACHERS?.[l.teacher_id]?.name || '';
-              newSched[l.day].push({
-                num: l.num || 1,
-                subject: subj,
-                sub: [room, teacher].filter(Boolean).join(' • '),
-                time: data.LESSON_TIMES?.[l.num - 1] ? `${data.LESSON_TIMES[l.num - 1].s}-${data.LESSON_TIMES[l.num - 1].e}` : ''
-              });
-            }
-          });
-          Object.keys(newSched).forEach(d => newSched[d].sort((a, b) => a.num - b.num));
-        }
-
-        boySchedule = newSched;
-        localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
+        const code = await fetchViaProxies(scriptTarget, text => {
+          decodeNikaData(text);
+          return true;
+        });
+        const data = decodeNikaData(code);
+        parseNikaSchedule(data);
 
         if (msg) {
           msg.style.color = '#34d399';
@@ -1534,6 +1543,8 @@
           msg.style.color = '#ef4444';
           msg.textContent = 'Ошибка: ' + err.message;
         }
+      } finally {
+        schoolSyncInProgress = false;
       }
     }
 
