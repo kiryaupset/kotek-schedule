@@ -461,6 +461,11 @@
       border-color: #3b82f6;
     }
 
+    input[type="date"].set-input {
+      color-scheme: dark;
+      min-width: 0;
+    }
+
     .btn-action {
       background: #2563eb;
       border: none;
@@ -593,6 +598,7 @@
         </div>
         <div class="current-date-title">
           <span id="sched-day-name">Понедельник</span>
+          <input type="date" id="sched-date" aria-label="Дата расписания" class="set-input" style="width:auto; max-width:42%; padding:3px 5px; font-size:0.75rem;" onchange="selectScheduleDate(this.value)">
           <button class="today-jump-btn" onclick="jumpToday()">Сегодня</button>
         </div>
       </div>
@@ -645,6 +651,11 @@
             <option value="girl">Для 1бд3 (ОКЭИ)</option>
             <option value="boy">Для 10а (Школа №2)</option>
           </select>
+          <select id="photo-mode-sel" class="set-input" aria-label="Период расписания на фото" onchange="updatePhotoDateField()">
+            <option value="weekly">Расписание на неделю</option>
+            <option value="date">Замена на один день</option>
+          </select>
+          <input type="date" id="photo-date" class="set-input hidden" aria-label="Дата замены по фото">
           <input type="file" id="photo-file-field" accept="image/*" class="set-input">
           <button class="btn-action" id="photo-upload-btn" onclick="parseSchedulePhoto()">Распознать фото через
             Gemini</button>
@@ -706,11 +717,21 @@
               <option value="5">Суббота</option>
             </select>
           </div>
+          <select id="manual-mode-sel" class="set-input" aria-label="Период редактирования" onchange="renderManualEditor()">
+            <option value="weekly">Обычное расписание</option>
+            <option value="date">Замена на один день</option>
+          </select>
+          <input type="date" id="manual-date" class="set-input hidden" aria-label="Дата замены" onchange="renderManualEditor()">
           <div id="manual-lessons-list" style="display:flex; flex-direction:column; gap:6px; margin-top:6px;"></div>
           <div style="display:flex; gap:8px; margin-top:6px;">
             <button class="btn-action secondary" style="flex:1;" onclick="addManualLessonRow()">+ Добавить урок</button>
             <button class="btn-action" style="flex:1;" onclick="saveManualSchedule()">Сохранить уроки</button>
           </div>
+          <button class="btn-action secondary hidden" id="manual-remove-replacement" onclick="removeDayReplacement()">Удалить замену на эту дату</button>
+        </div>
+        <div class="set-card">
+          <div class="set-heading">Домашние задания</div>
+          <button class="btn-action secondary" style="align-self:flex-start;" onclick="resetAllHomework()">Сбросить все ДЗ</button>
         </div>
       </div>
       <div class="nika-footer">© Котек</div>
@@ -864,10 +885,51 @@
 
     let boySchedule = JSON.parse(localStorage.getItem('nk_boy_sched')) || DEF_BOY_SCHEDULE;
     let girlSchedule = JSON.parse(localStorage.getItem('nk_girl_sched')) || DEF_GIRL_SCHEDULE;
+    let dayReplacements = JSON.parse(localStorage.getItem('nk_day_replacements')) || { boy: {}, girl: {} };
+    let schoolExchanges = JSON.parse(localStorage.getItem('nk_school_exchanges')) || {};
 
     let activeSchedTarget = 'boy'; // 'boy' или 'girl'
-    let selectedDay = (() => { const d = new Date().getDay(); return d === 0 ? 0 : d - 1; })();
-    const DAY_NAMES = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+    let selectedDate = new Date();
+    const DAY_NAMES = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+
+    function weekdayIndex(date) { return (date.getDay() + 6) % 7; }
+
+    function dateKey(date) {
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${date.getFullYear()}-${month}-${day}`;
+    }
+
+    function getBaseLessons(target, day) {
+      return (target === 'boy' ? boySchedule : girlSchedule)[day] || [];
+    }
+
+    function saveDayReplacement(target, key, lessons) {
+      const replacements = { ...dayReplacements, [target]: { ...dayReplacements[target], [key]: lessons } };
+      localStorage.setItem('nk_day_replacements', JSON.stringify(replacements));
+      dayReplacements = replacements;
+    }
+
+    function getLessonsForDate(target, date) {
+      const key = dateKey(date);
+      const replacement = dayReplacements[target][key];
+      if (replacement) return replacement;
+
+      const lessons = getBaseLessons(target, weekdayIndex(date));
+      const changes = target === 'boy' && schoolExchanges[key];
+      if (!changes) return lessons;
+
+      const updated = new Map(lessons.map(lesson => [lesson.num, lesson]));
+      for (const { num, cancelled, subject, sub } of changes) {
+        const previous = updated.get(num);
+        if (cancelled) {
+          if (previous) updated.set(num, { ...previous, subject: `❌ ${previous.subject} (ОТМЕНЕН)` });
+        } else {
+          updated.set(num, { num, subject: `⚡ ${subject || previous?.subject || 'Новый урок'} (Замена)`, sub: sub || previous?.sub || '' });
+        }
+      }
+      return [...updated.values()].sort((a, b) => a.num - b.num);
+    }
 
     function toMin(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
 
@@ -910,18 +972,25 @@
       titleEl.textContent = 'НАСТРОЙКИ';
 
       renderSettingsView();
+      updatePhotoDateField();
       renderManualEditor();
     }
 
     // --- РАСПИСАНИЕ: РЕНДЕР ---
     function selectDay(dayIdx) {
-      selectedDay = dayIdx;
+      const date = new Date(selectedDate);
+      date.setDate(date.getDate() + dayIdx - weekdayIndex(date));
+      selectedDate = date;
+      renderScheduleView();
+    }
+
+    function selectScheduleDate(key) {
+      if (key) selectedDate = new Date(`${key}T12:00:00`);
       renderScheduleView();
     }
 
     function jumpToday() {
-      const d = new Date().getDay();
-      selectedDay = d === 0 ? 0 : d - 1;
+      selectedDate = new Date();
       renderScheduleView();
     }
 
@@ -976,6 +1045,17 @@
       saveHwModal();
     }
 
+    function resetAllHomework() {
+      if (!confirm('Сбросить все домашние задания и отметки о выполнении для школы и колледжа?')) return;
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (/^nk_(hw|chk)_(boy|girl)_/.test(key)) localStorage.removeItem(key);
+      }
+      closeHwModal();
+      renderDaySchedule();
+      alert('Все домашние задания сброшены!');
+    }
+
     // Сохранение ДЗ: галочка сохраняется независимо от наличия текста
     function saveHwModal() {
       if (activeHw.target === null) return;
@@ -1017,7 +1097,7 @@
         return;
       }
 
-      const curDay = typeof currentDay !== 'undefined' ? currentDay : selectedDay;
+      const curDay = typeof currentDay !== 'undefined' ? currentDay : weekdayIndex(selectedDate);
 
       container.innerHTML = list.map(item => {
         const hwKey = `nk_hw_${target}_${curDay}_${item.num}`;
@@ -1053,20 +1133,23 @@
     }
 
     function renderScheduleView() {
+      const selectedDay = weekdayIndex(selectedDate);
+      const selectedKey = dateKey(selectedDate);
       document.querySelectorAll('.day-pill').forEach(p => {
         p.classList.toggle('active', parseInt(p.dataset.d) === selectedDay);
       });
       document.getElementById('sched-day-name').textContent = DAY_NAMES[selectedDay];
+      document.getElementById('sched-date').value = selectedKey;
 
       const cont = document.getElementById('lessons-render-target');
       cont.innerHTML = '';
 
       const now = new Date();
-      const realDay = now.getDay() === 0 ? 6 : now.getDay() - 1;
       const curM = now.getHours() * 60 + now.getMinutes();
 
       const isBoy = activeSchedTarget === 'boy';
-      const lessons = (isBoy ? boySchedule[selectedDay] : girlSchedule[selectedDay]) || [];
+      const lessons = getLessonsForDate(activeSchedTarget, selectedDate);
+      const baseLessons = getBaseLessons(activeSchedTarget, selectedDay);
       const bells = isBoy ? boyBells : (selectedDay === 0 ? girlBellsMon : girlBellsOther);
 
       if (lessons.length === 0) {
@@ -1076,13 +1159,14 @@
 
       lessons.forEach(l => {
         const bell = bells.find(b => b.num === l.num);
-        const isNow = selectedDay === realDay && bell && curM >= toMin(bell.start) && curM <= toMin(bell.end);
-        const hwKey = `nk_hw_${activeSchedTarget}_${selectedDay}_${l.num}`;
-        const chkKey = `nk_chk_${activeSchedTarget}_${selectedDay}_${l.num}`;
+        const isNow = selectedKey === dateKey(now) && bell && curM >= toMin(bell.start) && curM <= toMin(bell.end);
+        const sameSubject = baseLessons.some(base => base.num === l.num && base.subject === l.subject);
+        const homeworkDay = sameSubject ? selectedDay : selectedKey;
+        const hwKey = `nk_hw_${activeSchedTarget}_${homeworkDay}_${l.num}`;
+        const chkKey = `nk_chk_${activeSchedTarget}_${homeworkDay}_${l.num}`;
         const hwText = localStorage.getItem(hwKey) || '';
         const isDone = localStorage.getItem(chkKey) === 'true' || localStorage.getItem(chkKey) === '1';
         const hasHw = hwText.trim().length > 0;
-        const safeSubject = (l.subject || 'Урок').replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
         let statusPreview = '';
         if (hasHw) {
@@ -1107,14 +1191,15 @@
                 ${statusPreview}
               </div>
             </div>
-            <button class="pencil-btn ${hasHw || isDone ? 'has-hw' : ''} ${isDone ? 'done' : ''}" 
-                    title="Задать ДЗ" 
-                    onclick="openHwModal('${activeSchedTarget}', ${selectedDay}, ${l.num}, '${safeSubject}')">
+            <button class="pencil-btn ${hasHw || isDone ? 'has-hw' : ''} ${isDone ? 'done' : ''}" title="Задать ДЗ">
               ✏️
               ${hasHw || isDone ? '<div class="hw-indicator"></div>' : ''}
             </button>
           </div>
         `;
+        el.querySelector('.pencil-btn').addEventListener('click', () => {
+          openHwModal(activeSchedTarget, homeworkDay, l.num, l.subject || 'Урок');
+        });
         cont.appendChild(el);
       });
     }
@@ -1124,30 +1209,35 @@
     // --- СИНХРОННЫЙ РАДАР (КТО ГДЕ И ПЕРЕМЕНЫ) ---
     function updateRadar() {
       const now = new Date();
-      const day = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const day = weekdayIndex(now);
       const m = now.getHours() * 60 + now.getMinutes();
+      const bl = getLessonsForDate('boy', now);
+      const gl = getLessonsForDate('girl', now);
 
       let bTxt = "Уроков нет", bFree = true;
       let gTxt = "Пар нет", gFree = true;
 
-      if (day >= 0 && day <= 5) {
+      if (day <= 5 || bl.length || gl.length) {
         // Статус парня (10а)
-        const bl = boySchedule[day] || [];
-        if (bl.length > 0) {
-          const s = toMin(boyBells[0].start);
-          const e = toMin(boyBells[bl.length - 1].end);
-          if (m < s) { bTxt = `Начало в ${boyBells[0].start}`; }
+        const timed = bl.map(lesson => ({ lesson, bell: boyBells.find(b => b.num === lesson.num) }))
+          .filter(item => item.bell);
+        if (timed.length > 0) {
+          const first = timed[0].bell;
+          const s = toMin(first.start);
+          const e = toMin(timed[timed.length - 1].bell.end);
+          if (m < s) { bTxt = `Начало в ${first.start}`; }
           else if (m > e) { bTxt = "Уроки закончились"; }
           else {
             bFree = false;
-            for (let i = 0; i < bl.length; i++) {
-              const b = boyBells[i];
+            for (let i = 0; i < timed.length; i++) {
+              const { lesson, bell: b } = timed[i];
+              const next = timed[i + 1]?.bell;
               if (m >= toMin(b.start) && m <= toMin(b.end)) {
-                bTxt = `${bl[i].subject} (до ${b.end})`;
+                bTxt = `${lesson.subject} (до ${b.end})`;
                 break;
               }
-              if (i < bl.length - 1 && m > toMin(b.end) && m < toMin(boyBells[i + 1].start)) {
-                bTxt = `Перемена (до ${boyBells[i + 1].start})`;
+              if (next && m > toMin(b.end) && m < toMin(next.start)) {
+                bTxt = `Перемена (до ${next.start})`;
                 bFree = true;
                 break;
               }
@@ -1156,7 +1246,6 @@
         }
 
         // Статус девушки (1бд3 ОКЭИ)
-        const gl = girlSchedule[day] || [];
         const gb = day === 0 ? girlBellsMon : girlBellsOther;
         if (gl.length > 0) {
           const firstB = gb.find(x => x.num === gl[0].num);
@@ -1181,7 +1270,7 @@
 
       document.getElementById('radar-boy').textContent = bTxt;
       document.getElementById('radar-girl').textContent = gTxt;
-      document.getElementById('radar-free-alert').style.display = (bFree && gFree && day <= 5) ? 'block' : 'none';
+      document.getElementById('radar-free-alert').style.display = (bFree && gFree && (day <= 5 || bl.length || gl.length)) ? 'block' : 'none';
     }
 
     // --- НАСТРОЙКИ: РЕНДЕР И СОХРАНЕНИЕ ---
@@ -1252,39 +1341,145 @@
     }
 
     // --- РАСПОЗНАВАНИЕ ФОТО ЧЕРЕЗ GEMINI ---
-    async function parseSchedulePhoto() {
-      const apiKey = localStorage.getItem('gemini_api_key');
-      const fileInput = document.getElementById('photo-file-field');
-      const target = document.getElementById('photo-target-sel').value;
-      const msg = document.getElementById('photo-msg');
+    function updatePhotoDateField() {
+      const dateInput = document.getElementById('photo-date');
+      const dateMode = document.getElementById('photo-mode-sel').value === 'date';
+      dateInput.classList.toggle('hidden', !dateMode);
+      dateInput.required = dateMode;
+      if (dateMode && !dateInput.value) dateInput.value = dateKey(new Date());
+      document.getElementById('photo-upload-btn').textContent = dateMode
+        ? 'Распознать фото'
+        : 'Распознать фото через Gemini';
+    }
 
-      if (!apiKey) { alert('Сначала введите Gemini API ключ выше!'); return; }
-      if (!fileInput.files || fileInput.files.length === 0) { alert('Выберите фото расписания!'); return; }
+    function parseNumberedSchedule(text, target, key) {
+      const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      const groups = lines.map(line => /^(?:группа|класс)\s*[:.\-]?\s*(\S+)/i.exec(line)).filter(Boolean);
+      const normalizeGroup = value => value.toLowerCase().replace(/[.,]$/, '').replace(/^16д/, '1бд').replace(/a/g, 'а');
+      const expectedGroup = target === 'girl' ? '1бд3' : '10а';
+      if (groups.length !== 1 || normalizeGroup(groups[0][1]) !== expectedGroup) {
+        throw new Error('На фото не удалось подтвердить выбранную группу или класс.');
+      }
+      const dates = new Set([...text.matchAll(/\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b/g)]
+        .map(([, day, month, year]) => `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`));
+      if (dates.size !== 1 || !dates.has(key)) throw new Error('Проверь выбранную дату: она должна совпадать с датой на фото.');
 
-      const file = fileInput.files[0];
-      msg.textContent = '⏳ Анализируем изображение через нейросеть...';
+      const rows = [];
+      for (const line of lines) {
+        const match = /^(?:[•*·●-]\s*)?(\d{1,2})[.)]\s+(.+)$/.exec(line);
+        if (match) rows.push({ num: Number(match[1]), content: match[2] });
+        else if (rows.length && !/^\d{1,2}:\d{2}$/.test(line)) rows[rows.length - 1].content += ` ${line}`;
+      }
 
+      const lessons = rows.map(({ num, content }) => {
+        if (/^(?:отмена|отмен[её]н[ао]?|нет (?:пары|урока))(?:\s|[.!]|$)/i.test(content)) {
+          return { num, cancelled: true };
+        }
+        const details = /[А-ЯЁ][а-яё-]+\s+[А-ЯЁ]\.\s*[А-ЯЁ]\.|(?:Основной|Производственный) корпус|Аудитория\s+\d|Каб(?:инет|\.)\s*\d|Спортивный зал/i.exec(content);
+        const subject = details ? content.slice(0, details.index).trim() : content;
+        const sub = details ? content.slice(details.index).replace(/-\s+(?=[А-ЯЁ])/g, ' — ') : '';
+        return { num, subject, sub };
+      });
+      return { type: 'changes', lessons };
+    }
+
+    async function readSchedulePhotoLocally(file) {
+      let worker;
+      let script;
+      let timer;
+      let timedOut = false;
+      const timeout = new Promise((resolve, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error('Не удалось загрузить или запустить распознавание фото. Попробуй ещё раз.'));
+        }, 60000);
+      });
+      const read = async () => {
+        if (!globalThis.Tesseract) {
+          await new Promise((resolve, reject) => {
+            script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js';
+            script.integrity = 'sha384-2BQ3U3OdKOb0Uczxqr41I9UvZkzr4V9Hv8uSzMMZAlmhsFClvdZX5wi5fDCzG+tM';
+            script.crossOrigin = 'anonymous';
+            script.onload = resolve;
+            script.onerror = () => reject(new Error('Не удалось загрузить распознавание фото. Проверь подключение к интернету.'));
+            document.head.appendChild(script);
+          });
+        }
+        if (timedOut) return;
+        const ocr = globalThis.Tesseract;
+        worker = await ocr.createWorker('rus');
+        if (timedOut) { await worker.terminate(); return; }
+        await worker.setParameters({ tessedit_pageseg_mode: ocr.PSM.SINGLE_BLOCK });
+        return (await worker.recognize(file)).data.text;
+      };
       try {
-        const base64Data = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result.split(',')[1]);
-          r.onerror = rej;
-          r.readAsDataURL(file);
-        });
+        return await Promise.race([read(), timeout]);
+      } finally {
+        clearTimeout(timer);
+        script?.remove();
+        if (worker) await worker.terminate();
+      }
+    }
 
-        const prompt = `Ты парсер расписания. Проанализируй фото и извлеки уроки/пары для ${target === 'girl' ? 'колледжа ОКЭИ, группа 1бд3' : 'школы №2, 10а класс'}.
-Верни ТОЛЬКО строгий JSON без markdown:
+    function applyDayPhoto(target, key, parsed) {
+      if (!['full', 'changes'].includes(parsed?.type) || !Array.isArray(parsed.lessons) || !parsed.lessons.length) {
+        throw new Error('На фото не удалось распознать расписание или замены на выбранную дату.');
+      }
+
+      const existing = parsed.type === 'changes' ? getLessonsForDate(target, new Date(`${key}T12:00:00`)) : [];
+      const lessons = new Map(existing.map(lesson => [Number(lesson.num), lesson]));
+      const seen = new Set();
+      for (const row of parsed.lessons) {
+        const num = Number(row?.num);
+        if (!Number.isSafeInteger(num) || num < 1 || seen.has(num)) {
+          throw new Error('На фото не удалось однозначно определить номера уроков.');
+        }
+        seen.add(num);
+        if (row.cancelled === true) {
+          lessons.delete(num);
+          continue;
+        }
+        const previous = lessons.get(num);
+        const subject = typeof row.subject === 'string' ? row.subject.trim() : '';
+        const sub = typeof row.sub === 'string' ? row.sub.trim() : '';
+        if (!subject && (!sub || !previous)) throw new Error(`Не удалось распознать урок №${num}.`);
+        lessons.set(num, { num, subject: subject || previous.subject, sub });
+      }
+      saveDayReplacement(target, key, [...lessons.values()].sort((a, b) => a.num - b.num));
+    }
+
+    async function requestSchedulePhoto(file, apiKey, target, key) {
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = () => reject(new Error('Не удалось прочитать файл фото.'));
+        reader.readAsDataURL(file);
+      });
+
+      const group = target === 'girl' ? 'колледжа ОКЭИ, группа 1бд3' : 'школы №2, 10а класс';
+      const task = key ? `Извлеки только уроки или замены на ${key} (${DAY_NAMES[weekdayIndex(new Date(`${key}T12:00:00`))]}).
+Верни JSON вида {"type":"full","lessons":[{"num":1,"subject":"Предмет","sub":"Учитель/Аудитория"}]}.
+Используй "full", только если на фото полный список уроков на эту дату. Если на фото перечислены только замены или полнота списка неясна, верни "changes" и только видимые изменения.
+Для отмены урока верни {"num":1,"cancelled":true}. Если изменился только учитель или кабинет, укажи "sub" и оставь "subject" пустым. Используй номера уроков с фото.
+Если на фото явно указана другая дата или группа либо расписание неразборчиво, верни {"type":"changes","lessons":[]}. Если даты на фото нет, используй выбранную дату.` : `Верни JSON вида:
 {
   "0": [{"num": 1, "subject": "Предмет", "sub": "Учитель/Аудитория"}],
   "1": [...], "2": [...], "3": [...], "4": [...], "5": [...]
 }
 Где "0"-Пн, "1"-Вт, "2"-Ср, "3"-Чт, "4"-Пт, "5"-Сб.`;
+      const prompt = `Распознай расписание на фото для ${group}. Верни только строгий JSON без Markdown.\n${task}`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25000);
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+      try {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          signal: controller.signal,
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: file.type || "image/jpeg", data: base64Data } }] }]
+            contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: file.type || "image/jpeg", data: base64Data } }] }],
+            generationConfig: { responseMimeType: 'application/json' }
           })
         });
 
@@ -1292,13 +1487,62 @@
         if (resData.error) {
           throw new Error(resData.error.message || 'Ошибка API Google');
         }
-        if (!resData.candidates || !resData.candidates[0] || !resData.candidates[0].content) {
+        const parts = resData.candidates?.[0]?.content?.parts || [];
+        const text = parts.filter(part => !part.thought && typeof part.text === 'string')
+          .map(part => part.text).join('').replace(/```json|```/g, '').trim();
+        if (!text) {
           throw new Error('Нейросеть вернула пустой ответ (проверь соединение или фото)');
         }
-        const text = resData.candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(text);
+        return JSON.parse(text);
+      } catch (error) {
+        if (error.name === 'TypeError' || error.name === 'AbortError') {
+          throw new Error('Не удалось подключиться к Gemini. Проверь доступ к API и попробуй ещё раз.');
+        }
+        throw error;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
 
-        if (target === 'girl') {
+    async function parseSchedulePhoto() {
+      const apiKey = localStorage.getItem('gemini_api_key');
+      const file = document.getElementById('photo-file-field').files?.[0];
+      const target = document.getElementById('photo-target-sel').value;
+      const msg = document.getElementById('photo-msg');
+      const button = document.getElementById('photo-upload-btn');
+      const dateMode = document.getElementById('photo-mode-sel').value === 'date';
+      const key = dateMode ? document.getElementById('photo-date').value : '';
+
+      if (button.disabled) return;
+      if (!apiKey && !dateMode) { alert('Сначала введите Gemini API ключ выше!'); return; }
+      if (!file) { alert('Выберите фото расписания!'); return; }
+      if (dateMode && !key) { alert('Выберите дату замены!'); return; }
+
+      button.disabled = true;
+      msg.style.color = '#60a5fa';
+      msg.textContent = '⏳ Распознаём фото...';
+
+      try {
+        let parsed;
+        let useLocal = !apiKey;
+        if (apiKey) {
+          try {
+            parsed = await requestSchedulePhoto(file, apiKey, target, key);
+            if (dateMode && !parsed?.lessons?.length) useLocal = true;
+          } catch (error) {
+            if (!dateMode) throw error;
+            useLocal = true;
+          }
+        }
+        if (useLocal) {
+          msg.textContent = '⏳ Читаем фото на устройстве...';
+          const text = await readSchedulePhotoLocally(file);
+          parsed = parseNumberedSchedule(text, target, key);
+        }
+
+        if (dateMode) {
+          applyDayPhoto(target, key, parsed);
+        } else if (target === 'girl') {
           girlSchedule = parsed;
           localStorage.setItem('nk_girl_sched', JSON.stringify(girlSchedule));
         } else {
@@ -1306,11 +1550,17 @@
           localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
         }
 
+        renderDaySchedule();
+        updateRadar();
         msg.style.color = '#34d399';
-        msg.textContent = '✓ Расписание успешно распознано и применено!';
+        msg.textContent = dateMode
+          ? `✓ Замена на ${key.split('-').reverse().join('.')} распознана и применена!`
+          : '✓ Расписание успешно распознано и применено!';
       } catch (e) {
         msg.style.color = '#ef4444';
         msg.textContent = 'Ошибка: ' + e.message;
+      } finally {
+        button.disabled = false;
       }
     }
 
@@ -1389,52 +1639,32 @@
         }
       }
 
-      // 4. Проверяем замены (CLASS_EXCHANGE) для текущей даты
-      const todayDateStr = (() => {
-        const d = new Date();
-        const dd = String(d.getDate()).padStart(2, '0');
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        return `${dd}.${mm}.${d.getFullYear()}`;
-      })();
-
-      if (nika.CLASS_EXCHANGE && nika.CLASS_EXCHANGE[classId]) {
-        const exchanges = nika.CLASS_EXCHANGE[classId];
-        const todayEx = exchanges[todayDateStr];
-        if (todayEx) {
-          const curDayOfWeek = (() => { const d = new Date().getDay(); return d === 0 ? 6 : d - 1; })();
-          if (curDayOfWeek >= 0 && curDayOfWeek <= 5) {
-            for (const [lesNumStr, exData] of Object.entries(todayEx)) {
-              const num = parseInt(lesNumStr);
-              let targetLesson = newSched[curDayOfWeek].find(x => x.num === num);
-              if (exData.s === 'F') {
-                if (targetLesson) {
-                  targetLesson.subject = `❌ ${targetLesson.subject} (ОТМЕНЕН)`;
-                }
-              } else {
-                const subjs = (exData.s || []).map(id => nika.SUBJECTS[id] || id).join(', ');
-                const teachs = (exData.t || []).map(id => nika.TEACHERS[id] || id).join(', ');
-                const rooms = (exData.r || []).map(id => nika.ROOMS[id] ? `Каб. ${nika.ROOMS[id]}` : id).join(', ');
-                const subParts = [teachs, rooms].filter(Boolean);
-
-                if (targetLesson) {
-                  targetLesson.subject = `⚡ ${subjs || targetLesson.subject} (Замена)`;
-                  if (subParts.length) targetLesson.sub = subParts.join(' • ');
-                } else {
-                  newSched[curDayOfWeek].push({
-                    num: num,
-                    subject: `⚡ ${subjs || 'Новый урок'} (Замена)`,
-                    sub: subParts.join(' • ')
-                  });
-                  newSched[curDayOfWeek].sort((a, b) => a.num - b.num);
-                }
-              }
-            }
+      // Школьные замены привязаны к дате и хранятся отдельно от обычных уроков.
+      const exchanges = {};
+      for (const [date, entries] of Object.entries(nika.CLASS_EXCHANGE?.[classId] || {})) {
+        const parts = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(date);
+        if (!parts) continue;
+        const [, day, month, year] = parts;
+        const changes = [];
+        for (const [slot, change] of Object.entries(entries)) {
+          const num = Number(slot);
+          if (!Number.isInteger(num) || num < 1) continue;
+          if (change.s === 'F') {
+            changes.push({ num, cancelled: true });
+            continue;
           }
+          const subject = (change.s || []).map(id => nika.SUBJECTS[id] || id).join(', ');
+          const teachers = (change.t || []).map(id => nika.TEACHERS[id] || id).join(', ');
+          const rooms = (change.r || []).map(id => nika.ROOMS[id] ? `Каб. ${nika.ROOMS[id]}` : id).join(', ');
+          changes.push({ num, subject, sub: [teachers, rooms].filter(Boolean).join(' • ') });
         }
+        exchanges[`${year}-${month}-${day}`] = changes;
       }
 
       boySchedule = newSched;
+      schoolExchanges = exchanges;
       localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
+      localStorage.setItem('nk_school_exchanges', JSON.stringify(schoolExchanges));
       return newSched;
     }
 
@@ -1603,65 +1833,91 @@
     }
 
     // --- РУЧНОЙ РЕДАКТОР УРОКОВ ---
+    let manualLessons = [];
+
     function renderManualEditor() {
-      const tEl = document.getElementById('manual-target-sel');
-      const dEl = document.getElementById('manual-day-sel');
+      const target = document.getElementById('manual-target-sel').value;
+      const daySelect = document.getElementById('manual-day-sel');
+      const dateInput = document.getElementById('manual-date');
+      const dateMode = document.getElementById('manual-mode-sel').value === 'date';
+      if (!dateInput.value) dateInput.value = dateKey(new Date());
+      dateInput.classList.toggle('hidden', !dateMode);
+      daySelect.classList.toggle('hidden', dateMode);
+      document.getElementById('manual-remove-replacement').classList.toggle('hidden',
+        !dateMode || !dayReplacements[target][dateInput.value]);
+
+      const lessons = dateMode
+        ? getLessonsForDate(target, new Date(`${dateInput.value}T12:00:00`))
+        : getBaseLessons(target, Number(daySelect.value));
+      manualLessons = lessons.map(lesson => ({ ...lesson }));
+      renderManualRows();
+    }
+
+    function renderManualRows() {
+      const target = document.getElementById('manual-target-sel').value;
       const cont = document.getElementById('manual-lessons-list');
-      if (!tEl || !dEl || !cont) return;
-
-      const target = tEl.value;
-      const day = parseInt(dEl.value);
-      cont.innerHTML = '';
-
-      const list = (target === 'boy' ? boySchedule[day] : girlSchedule[day]) || [];
-      list.forEach((l, idx) => {
+      cont.innerHTML = manualLessons.map((l, idx) => {
         const subVal = l.sub || (l.teacher ? `${l.teacher} • ${l.room || ''}` : '');
-        cont.innerHTML += `
+        return `
           <div style="display:flex; gap:6px; align-items:center; background:#11141a; padding:6px; border-radius:6px; border:1px solid #282f3d;">
             <span style="font-weight:700; width:20px; text-align:center; color:#94a3b8; font-size:0.85rem;">${l.num}</span>
-            <input type="text" class="set-input" id="med_subj_${idx}" placeholder="Предмет" value="${l.subject || ''}" style="flex:2; padding:5px 8px; font-size:0.8rem;">
-            <input type="text" class="set-input" id="med_sub_${idx}" placeholder="${target === 'boy' ? 'Кабинет / Учитель' : 'Ауд. / Преподаватель'}" value="${subVal}" style="flex:2; padding:5px 8px; font-size:0.8rem;">
-            <button onclick="removeManualLessonRow(${idx})" style="background:#ef4444; border:none; color:#fff; border-radius:4px; width:26px; height:26px; cursor:pointer; font-weight:700;">✕</button>
+            <input type="text" class="set-input" id="med_subj_${idx}" placeholder="Предмет" value="${escapeAttr(l.subject)}" style="flex:2; min-width:0; padding:5px 8px; font-size:0.8rem;">
+            <input type="text" class="set-input" id="med_sub_${idx}" placeholder="${target === 'boy' ? 'Кабинет / Учитель' : 'Ауд. / Преподаватель'}" value="${escapeAttr(subVal)}" style="flex:2; min-width:0; padding:5px 8px; font-size:0.8rem;">
+            <button aria-label="Удалить урок ${l.num}" onclick="removeManualLessonRow(${idx})" style="background:#ef4444; border:none; color:#fff; border-radius:4px; width:26px; height:26px; flex-shrink:0; cursor:pointer; font-weight:700;">✕</button>
           </div>
         `;
-      });
+      }).join('');
     }
 
     function addManualLessonRow() {
-      const target = document.getElementById('manual-target-sel').value;
-      const day = parseInt(document.getElementById('manual-day-sel').value);
-      const list = target === 'boy' ? boySchedule[day] : girlSchedule[day];
-      const nextNum = list.length > 0 ? list[list.length - 1].num + 1 : 1;
-      list.push({ num: nextNum, subject: "Новый предмет", sub: "Кабинет" });
-      renderManualEditor();
+      readManualRows();
+      const nextNum = Math.max(0, ...manualLessons.map(lesson => lesson.num)) + 1;
+      manualLessons.push({ num: nextNum, subject: "Новый предмет", sub: "Кабинет" });
+      renderManualRows();
     }
 
     function removeManualLessonRow(idx) {
-      const target = document.getElementById('manual-target-sel').value;
-      const day = parseInt(document.getElementById('manual-day-sel').value);
-      const list = target === 'boy' ? boySchedule[day] : girlSchedule[day];
-      list.splice(idx, 1);
-      renderManualEditor();
+      readManualRows();
+      manualLessons.splice(idx, 1);
+      renderManualRows();
     }
 
-    function saveManualSchedule() {
-      const target = document.getElementById('manual-target-sel').value;
-      const day = parseInt(document.getElementById('manual-day-sel').value);
-      const list = target === 'boy' ? boySchedule[day] : girlSchedule[day];
-
-      list.forEach((l, idx) => {
+    function readManualRows() {
+      manualLessons.forEach((l, idx) => {
         const sEl = document.getElementById(`med_subj_${idx}`);
         const bEl = document.getElementById(`med_sub_${idx}`);
         if (sEl) l.subject = sEl.value.trim();
         if (bEl) l.sub = bEl.value.trim();
       });
+    }
 
-      if (target === 'boy') {
-        localStorage.setItem('nk_boy_sched', JSON.stringify(boySchedule));
+    function saveManualSchedule() {
+      const target = document.getElementById('manual-target-sel').value;
+      const dateMode = document.getElementById('manual-mode-sel').value === 'date';
+      readManualRows();
+      const lessons = manualLessons.map(lesson => ({ ...lesson }));
+
+      if (dateMode) {
+        const date = document.getElementById('manual-date').value;
+        if (!date) return;
+        saveDayReplacement(target, date, lessons);
       } else {
-        localStorage.setItem('nk_girl_sched', JSON.stringify(girlSchedule));
+        const day = Number(document.getElementById('manual-day-sel').value);
+        const schedule = target === 'boy' ? boySchedule : girlSchedule;
+        schedule[day] = lessons;
+        localStorage.setItem(`nk_${target}_sched`, JSON.stringify(schedule));
       }
+      renderManualEditor();
       alert('Расписание успешно сохранено!');
+      updateRadar();
+    }
+
+    function removeDayReplacement() {
+      const target = document.getElementById('manual-target-sel').value;
+      const date = document.getElementById('manual-date').value;
+      delete dayReplacements[target][date];
+      localStorage.setItem('nk_day_replacements', JSON.stringify(dayReplacements));
+      renderManualEditor();
       updateRadar();
     }
 
