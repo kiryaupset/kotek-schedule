@@ -91,6 +91,29 @@
       background: rgba(255, 255, 255, 0.25);
     }
 
+    .header-hw-btn {
+      left: auto;
+      right: 10px;
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .header-hw-btn[aria-pressed="true"] {
+      background: var(--accent-blue);
+    }
+
+    .hw-edit-panel {
+      margin: 8px 12px;
+    }
+
+    .hw-edit-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+    }
+
     .school-title {
       font-size: 0.95rem;
       font-weight: 700;
@@ -534,7 +557,8 @@
   <div class="app-wrapper">
     <!-- ЕДИНАЯ ШАПКА КОТЕК -->
     <header class="app-header" id="app-header">
-      <button class="header-back-btn hidden" id="header-back-btn" onclick="openHome()">←</button>
+      <button class="header-back-btn hidden" id="header-back-btn" onclick="goBack()">←</button>
+      <button type="button" class="header-back-btn header-hw-btn hidden" id="header-hw-btn" aria-label="Редактировать домашние задания" aria-pressed="false" onclick="toggleHomeworkEditor()">ДЗ</button>
       <div id="header-home-info">
         <div class="school-title">Синхронное расписание</div>
         <div class="school-sub">СОШ №2 & ОКЭИ</div>
@@ -603,6 +627,16 @@
         </div>
       </div>
 
+      <div class="set-card hw-edit-panel hidden" id="hw-edit-panel">
+        <label class="set-heading" for="hw-photo-file">Фото ДЗ на выбранную дату</label>
+        <input type="file" id="hw-photo-file" accept="image/*" class="set-input">
+        <button type="button" class="btn-action secondary" id="hw-photo-btn" onclick="importHomeworkPhoto()">Распознать ДЗ</button>
+        <div class="set-desc" id="hw-edit-msg" role="status"></div>
+        <div class="hw-edit-actions">
+          <button type="button" class="btn-action secondary" onclick="resetAllHomework()">Сбросить все ДЗ</button>
+          <button type="button" class="btn-action" id="hw-apply-btn" onclick="applyHomeworkDraft()">Применить</button>
+        </div>
+      </div>
       <div class="lessons-list" id="lessons-render-target"></div>
       <div class="nika-footer">© Котек</div>
     </section>
@@ -729,10 +763,6 @@
           </div>
           <button class="btn-action secondary hidden" id="manual-remove-replacement" onclick="removeDayReplacement()">Удалить замену на эту дату</button>
         </div>
-        <div class="set-card">
-          <div class="set-heading">Домашние задания</div>
-          <button class="btn-action secondary" style="align-self:flex-start;" onclick="resetAllHomework()">Сбросить все ДЗ</button>
-        </div>
       </div>
       <div class="nika-footer">© Котек</div>
     </section>
@@ -755,7 +785,7 @@
         <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end;">
           <button type="button" onclick="resetHwModal()" style="background: #233044; border: none; color: #94a3b8; padding: 5px 8px; border-radius: 8px; font-size: 0.72rem; cursor: pointer; margin-right: auto; align-self: center;">Сбросить ДЗ</button>
           <button type="button" onclick="closeHwModal()" style="background: #233044; border: none; color: #94a3b8; padding: 8px 14px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;">Отмена</button>
-          <button type="button" onclick="saveHwModal()" style="background: #2563eb; border: none; color: #ffffff; padding: 8px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Сохранить</button>
+          <button type="button" onclick="saveHwModal()" style="background: #2563eb; border: none; color: #ffffff; padding: 8px 18px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">Готово</button>
         </div>
       </div>
     </div>
@@ -934,12 +964,21 @@
     function toMin(s) { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
 
     // --- ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ ---
+    function goBack() {
+      if (homeworkDraft) {
+        toggleHomeworkEditor();
+        return;
+      }
+      openHome();
+    }
+
     function openHome() {
       document.getElementById('view-home').classList.remove('hidden');
       document.getElementById('view-schedule').classList.add('hidden');
       document.getElementById('view-settings').classList.add('hidden');
 
       document.getElementById('header-back-btn').classList.add('hidden');
+      document.getElementById('header-hw-btn').classList.add('hidden');
       document.getElementById('header-home-info').classList.remove('hidden');
       document.getElementById('header-sub-title').classList.add('hidden');
       updateRadar();
@@ -952,6 +991,7 @@
       document.getElementById('view-settings').classList.add('hidden');
 
       document.getElementById('header-back-btn').classList.remove('hidden');
+      document.getElementById('header-hw-btn').classList.remove('hidden');
       document.getElementById('header-home-info').classList.add('hidden');
       const titleEl = document.getElementById('header-sub-title');
       titleEl.classList.remove('hidden');
@@ -966,6 +1006,7 @@
       document.getElementById('view-settings').classList.remove('hidden');
 
       document.getElementById('header-back-btn').classList.remove('hidden');
+      document.getElementById('header-hw-btn').classList.add('hidden');
       document.getElementById('header-home-info').classList.add('hidden');
       const titleEl = document.getElementById('header-sub-title');
       titleEl.classList.remove('hidden');
@@ -980,17 +1021,28 @@
     function selectDay(dayIdx) {
       const date = new Date(selectedDate);
       date.setDate(date.getDate() + dayIdx - weekdayIndex(date));
-      selectedDate = date;
-      renderScheduleView();
+      changeScheduleDate(date);
     }
 
     function selectScheduleDate(key) {
-      if (key) selectedDate = new Date(`${key}T12:00:00`);
-      renderScheduleView();
+      changeScheduleDate(key ? new Date(`${key}T12:00:00`) : selectedDate);
     }
 
     function jumpToday() {
-      selectedDate = new Date();
+      changeScheduleDate(new Date());
+    }
+
+    function changeScheduleDate(date) {
+      if (homeworkDraft && dateKey(date) !== homeworkDraft.key) {
+        if (!confirmDiscardHomework()) {
+          renderScheduleView();
+          return;
+        }
+        selectedDate = date;
+        startHomeworkDraft();
+      } else {
+        selectedDate = date;
+      }
       renderScheduleView();
     }
 
@@ -1009,37 +1061,72 @@
     }
 
     // --- МОДАЛЬНОЕ ОКНО ДЗ И КНОПКА-КАРАНДАШ ---
-    let activeHw = { target: null, day: null, num: null };
+    let activeHw = null;
+    let homeworkDraft = null;
 
-    function openHwModal(target, day, num, subjectName) {
-      activeHw = { target, day, num };
-      const titleEl = document.getElementById('hw-modal-title');
-      if (titleEl) titleEl.textContent = `${num}. ${subjectName}`;
+    function showHomeworkMessage(text, error = false) {
+      const msg = document.getElementById('hw-edit-msg');
+      msg.textContent = text;
+      msg.style.color = error ? '#ef4444' : '';
+    }
 
-      const chkVal = localStorage.getItem(`nk_chk_${target}_${day}_${num}`);
-      const chkEl = document.getElementById('hw-modal-chk');
-      if (chkEl) chkEl.checked = (chkVal === 'true' || chkVal === '1');
+    function confirmDiscardHomework() {
+      return !homeworkDraft.changes.size || confirm('Выйти без применения изменений ДЗ?');
+    }
 
-      const txtEl = document.getElementById('hw-modal-text');
-      if (txtEl) {
-        txtEl.value = localStorage.getItem(`nk_hw_${target}_${day}_${num}`) || '';
+    function startHomeworkDraft() {
+      homeworkDraft = { target: activeSchedTarget, key: dateKey(selectedDate), changes: new Map(), busy: false };
+      document.getElementById('hw-photo-file').value = '';
+      closeHwModal();
+      showHomeworkMessage('');
+    }
+
+    function toggleHomeworkEditor() {
+      if (homeworkDraft) {
+        if (!confirmDiscardHomework()) return;
+        homeworkDraft = null;
+        closeHwModal();
+      } else {
+        startHomeworkDraft();
       }
+      renderDaySchedule();
+    }
 
-      const modal = document.getElementById('hw-modal');
-      if (modal) {
-        modal.classList.remove('hidden');
-        if (txtEl) setTimeout(() => txtEl.focus(), 50);
-      }
+    function readHomework(target, date, lesson) {
+      const key = dateKey(date);
+      const staged = homeworkDraft?.target === target && homeworkDraft.key === key && homeworkDraft.changes.get(lesson.num);
+      if (staged && staged.subject === lesson.subject) return staged;
+
+      const saved = JSON.parse(localStorage.getItem(`nk_hw_${target}_${key}`) || '{}')[lesson.num];
+      if (saved && saved.subject === lesson.subject) return saved;
+
+      // Earlier versions used weekday keys for recurring lessons and date keys for substitutions.
+      const day = weekdayIndex(date);
+      const isBase = getBaseLessons(target, day).some(base => base.num === lesson.num && base.subject === lesson.subject);
+      const slot = `${target}_${isBase ? day : key}_${lesson.num}`;
+      const checked = localStorage.getItem(`nk_chk_${slot}`);
+      return { text: localStorage.getItem(`nk_hw_${slot}`) || '', done: checked === 'true' || checked === '1' };
+    }
+
+    function openHwModal(lesson) {
+      if (!homeworkDraft || homeworkDraft.busy) return;
+      activeHw = lesson;
+      const entry = readHomework(activeSchedTarget, selectedDate, lesson);
+      document.getElementById('hw-modal-title').textContent = `${lesson.num}. ${lesson.subject || 'Урок'}`;
+      document.getElementById('hw-modal-chk').checked = entry.done;
+      const input = document.getElementById('hw-modal-text');
+      input.value = entry.text;
+      document.getElementById('hw-modal').classList.remove('hidden');
+      setTimeout(() => input.focus(), 50);
     }
 
     function closeHwModal() {
-      const modal = document.getElementById('hw-modal');
-      if (modal) modal.classList.add('hidden');
-      activeHw = { target: null, day: null, num: null };
+      document.getElementById('hw-modal').classList.add('hidden');
+      activeHw = null;
     }
 
     function resetHwModal() {
-      if (activeHw.target === null) return;
+      if (!activeHw) return;
       document.getElementById('hw-modal-text').value = '';
       document.getElementById('hw-modal-chk').checked = false;
       saveHwModal();
@@ -1051,90 +1138,47 @@
         const key = localStorage.key(i);
         if (/^nk_(hw|chk)_(boy|girl)_/.test(key)) localStorage.removeItem(key);
       }
-      closeHwModal();
+      if (homeworkDraft) startHomeworkDraft();
+      else closeHwModal();
       renderDaySchedule();
       alert('Все домашние задания сброшены!');
     }
 
-    // Сохранение ДЗ: галочка сохраняется независимо от наличия текста
     function saveHwModal() {
-      if (activeHw.target === null) return;
-      const { target, day, num } = activeHw;
-      const text = (document.getElementById('hw-modal-text')?.value || '').trim();
-      const done = document.getElementById('hw-modal-chk')?.checked;
-
-      const hwKey = `nk_hw_${target}_${day}_${num}`;
-      const chkKey = `nk_chk_${target}_${day}_${num}`;
-
-      // Текст задания
-      if (text) {
-        localStorage.setItem(hwKey, text);
-      } else {
-        localStorage.removeItem(hwKey);
-      }
-
-      // Чекбокс выполнения
-      if (done) {
-        localStorage.setItem(chkKey, 'true');
-      } else {
-        localStorage.removeItem(chkKey);
-      }
-
+      if (!activeHw || !homeworkDraft) return;
+      homeworkDraft.changes.set(activeHw.num, {
+        subject: activeHw.subject,
+        text: document.getElementById('hw-modal-text').value.trim(),
+        done: document.getElementById('hw-modal-chk').checked
+      });
       closeHwModal();
       renderDaySchedule();
     }
 
-    // Отрисовка списка: учитывает галочку даже без текста ДЗ
-    function renderList(target, list, containerId, badgeId) {
-      const container = document.getElementById(containerId);
-      const badge = document.getElementById(badgeId);
-      if (badge && list) badge.textContent = `${list.length} ${target === 'boy' ? 'уроков' : 'пар'}`;
-
-      if (!container) return;
-
-      if (!list || list.length === 0) {
-        container.innerHTML = `<div class="lesson-item empty" style="padding: 16px; text-align: center; color: #64748b;">Занятий нет — выходной 🎉</div>`;
-        return;
-      }
-
-      const curDay = typeof currentDay !== 'undefined' ? currentDay : weekdayIndex(selectedDate);
-
-      container.innerHTML = list.map(item => {
-        const hwKey = `nk_hw_${target}_${curDay}_${item.num}`;
-        const chkKey = `nk_chk_${target}_${curDay}_${item.num}`;
-        const hwText = localStorage.getItem(hwKey) || '';
-        const isDone = localStorage.getItem(chkKey) === 'true';
-        const hasHw = hwText.trim().length > 0;
-
-        let statusPreview = '';
-        if (hasHw) {
-          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: ${isDone ? '#34d399' : '#60a5fa'}; line-height: 1.25;">${isDone ? '✓ ' : '📝 '}${escapeHtml(hwText)}</div>`;
-        } else if (isDone) {
-          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: #34d399; line-height: 1.25;">✓ Выполнено</div>`;
+    function applyHomeworkDraft() {
+      if (!homeworkDraft || homeworkDraft.busy) return;
+      const { target, key, changes } = homeworkDraft;
+      if (changes.size) {
+        const storageKey = `nk_hw_${target}_${key}`;
+        try {
+          const saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+          localStorage.setItem(storageKey, JSON.stringify({ ...saved, ...Object.fromEntries(changes) }));
+        } catch (error) {
+          showHomeworkMessage('Не удалось сохранить ДЗ. Изменения остались в редакторе.', true);
+          return;
         }
-
-        return `
-          <div class="lesson-item" style="padding: 10px 14px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1c283a;">
-            <div style="width: 22px; font-weight: 700; font-size: 0.9rem; color: #64748b; text-align: center;">${item.num}</div>
-            <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
-              <div style="font-size: 0.92rem; font-weight: 600; color: #f1f5f9;">${escapeHtml(item.subject || 'Урок')}</div>
-              <div style="font-size: 0.78rem; color: #8b9bb4;">${escapeHtml(item.sub || '')} ${item.time ? '• ' + escapeHtml(item.time) : ''}</div>
-              ${statusPreview}
-            </div>
-            <button class="pencil-btn ${hasHw || isDone ? 'has-hw' : ''} ${isDone ? 'done' : ''}" 
-                    title="Задать ДЗ" 
-                    onclick="openHwModal('${target}', ${curDay}, ${item.num}, '${escapeAttr(item.subject || 'Урок')}')">
-              ✏️
-              ${hasHw || isDone ? '<div class="hw-indicator"></div>' : ''}
-            </button>
-          </div>
-        `;
-      }).join('');
+      }
+      homeworkDraft = null;
+      closeHwModal();
+      renderDaySchedule();
     }
 
     function renderScheduleView() {
       const selectedDay = weekdayIndex(selectedDate);
       const selectedKey = dateKey(selectedDate);
+      const editing = Boolean(homeworkDraft);
+      document.getElementById('header-hw-btn').setAttribute('aria-pressed', String(editing));
+      document.getElementById('hw-edit-panel').classList.toggle('hidden', !editing);
       document.querySelectorAll('.day-pill').forEach(p => {
         p.classList.toggle('active', parseInt(p.dataset.d) === selectedDay);
       });
@@ -1149,8 +1193,9 @@
 
       const isBoy = activeSchedTarget === 'boy';
       const lessons = getLessonsForDate(activeSchedTarget, selectedDate);
-      const baseLessons = getBaseLessons(activeSchedTarget, selectedDay);
       const bells = isBoy ? boyBells : (selectedDay === 0 ? girlBellsMon : girlBellsOther);
+      document.getElementById('hw-photo-btn').disabled = !lessons.length || Boolean(homeworkDraft?.busy);
+      document.getElementById('hw-apply-btn').disabled = Boolean(homeworkDraft?.busy);
 
       if (lessons.length === 0) {
         cont.innerHTML = '<div style="text-align:center; padding:36px; color:var(--text-muted); font-size:0.9rem;">В этот день занятий нет 🎉</div>';
@@ -1160,17 +1205,12 @@
       lessons.forEach(l => {
         const bell = bells.find(b => b.num === l.num);
         const isNow = selectedKey === dateKey(now) && bell && curM >= toMin(bell.start) && curM <= toMin(bell.end);
-        const sameSubject = baseLessons.some(base => base.num === l.num && base.subject === l.subject);
-        const homeworkDay = sameSubject ? selectedDay : selectedKey;
-        const hwKey = `nk_hw_${activeSchedTarget}_${homeworkDay}_${l.num}`;
-        const chkKey = `nk_chk_${activeSchedTarget}_${homeworkDay}_${l.num}`;
-        const hwText = localStorage.getItem(hwKey) || '';
-        const isDone = localStorage.getItem(chkKey) === 'true' || localStorage.getItem(chkKey) === '1';
+        const { text: hwText, done: isDone } = readHomework(activeSchedTarget, selectedDate, l);
         const hasHw = hwText.trim().length > 0;
 
         let statusPreview = '';
         if (hasHw) {
-          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: ${isDone ? '#34d399' : '#60a5fa'}; line-height: 1.25; word-break: break-word;">${isDone ? '✓ ' : '📝 '}${escapeHtml(hwText)}</div>`;
+          statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: ${isDone ? '#34d399' : '#60a5fa'}; line-height: 1.25; word-break: break-word; white-space: pre-wrap;">${isDone ? '✓ ' : '📝 '}${escapeHtml(hwText)}</div>`;
         } else if (isDone) {
           statusPreview = `<div style="font-size: 0.76rem; margin-top: 3px; color: #34d399; line-height: 1.25;">✓ Выполнено</div>`;
         }
@@ -1191,15 +1231,13 @@
                 ${statusPreview}
               </div>
             </div>
-            <button class="pencil-btn ${hasHw || isDone ? 'has-hw' : ''} ${isDone ? 'done' : ''}" title="Задать ДЗ">
+            ${editing ? `<button type="button" class="pencil-btn ${hasHw || isDone ? 'has-hw' : ''} ${isDone ? 'done' : ''}" title="Задать ДЗ" ${homeworkDraft.busy ? 'disabled' : ''}>
               ✏️
               ${hasHw || isDone ? '<div class="hw-indicator"></div>' : ''}
-            </button>
+            </button>` : ''}
           </div>
         `;
-        el.querySelector('.pencil-btn').addEventListener('click', () => {
-          openHwModal(activeSchedTarget, homeworkDay, l.num, l.subject || 'Урок');
-        });
+        el.querySelector('.pencil-btn')?.addEventListener('click', () => openHwModal(l));
         cont.appendChild(el);
       });
     }
@@ -1383,7 +1421,7 @@
       return { type: 'changes', lessons };
     }
 
-    async function readSchedulePhotoLocally(file) {
+    async function readPhotoTextLocally(file, withLayout = false) {
       let worker;
       let script;
       let timer;
@@ -1411,7 +1449,22 @@
         worker = await ocr.createWorker('rus');
         if (timedOut) { await worker.terminate(); return; }
         await worker.setParameters({ tessedit_pageseg_mode: ocr.PSM.SINGLE_BLOCK });
-        return (await worker.recognize(file)).data.text;
+        const { data } = await worker.recognize(file, {}, { text: true, blocks: withLayout });
+        if (!withLayout) return data.text;
+        const lines = (data.blocks || []).flatMap(block => block.paragraphs.flatMap(paragraph => paragraph.lines));
+        if (!lines.some(line => diaryLessonNumber(line.text.trim()))) return { text: data.text };
+        const bitmap = await createImageBitmap(file);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          const drawing = canvas.getContext('2d');
+          drawing.drawImage(bitmap, 0, 0);
+          const image = drawing.getImageData(0, 0, canvas.width, canvas.height);
+          return { text: data.text, diary: readDiaryCards(lines, image) };
+        } finally {
+          bitmap.close();
+        }
       };
       try {
         return await Promise.race([read(), timeout]);
@@ -1450,13 +1503,6 @@
     }
 
     async function requestSchedulePhoto(file, apiKey, target, key) {
-      const base64Data = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = () => reject(new Error('Не удалось прочитать файл фото.'));
-        reader.readAsDataURL(file);
-      });
-
       const group = target === 'girl' ? 'колледжа ОКЭИ, группа 1бд3' : 'школы №2, 10а класс';
       const task = key ? `Извлеки только уроки или замены на ${key} (${DAY_NAMES[weekdayIndex(new Date(`${key}T12:00:00`))]}).
 Верни JSON вида {"type":"full","lessons":[{"num":1,"subject":"Предмет","sub":"Учитель/Аудитория"}]}.
@@ -1469,6 +1515,16 @@
 }
 Где "0"-Пн, "1"-Вт, "2"-Ср, "3"-Чт, "4"-Пт, "5"-Сб.`;
       const prompt = `Распознай расписание на фото для ${group}. Верни только строгий JSON без Markdown.\n${task}`;
+      return requestPhotoJson(file, apiKey, prompt);
+    }
+
+    async function requestPhotoJson(file, apiKey, prompt) {
+      const base64Data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = () => reject(new Error('Не удалось прочитать файл фото.'));
+        reader.readAsDataURL(file);
+      });
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 25000);
 
@@ -1504,6 +1560,230 @@
       }
     }
 
+    const HOMEWORK_SUBJECTS = {
+      'алгебра': ['алг', 'алг и нач мат анализа', 'алгебра и начала математического анализа', 'алгебра и начала анализа'],
+      'геометрия': ['геом'],
+      'русский язык': ['русский', 'рус яз', 'рус язык', 'русский яз'],
+      'иностранный язык': ['иностранный', 'ин яз', 'ин яз англ', 'английский язык', 'английский', 'англ яз', 'англ'],
+      'физическая культура': ['физкультура', 'физ ра', 'физ культ'],
+      'обзр': ['обж', 'обж обзр', 'основы безопасности и защиты родины', 'основы безопасности жизнедеятельности'],
+      'вероятность и статистика': ['вероятность', 'вер и стат', 'вис'],
+      'литература': ['лит', 'лит ра'],
+      'информатика': ['информ'],
+      'обществознание': ['общ ествознание', 'общ ество', 'общество', 'обществ'],
+      'математика': ['матем'],
+      'физика': [], 'химия': [], 'история': [], 'география': [], 'биология': [], 'родной язык': []
+    };
+
+    function normalizeHomeworkSubject(value) {
+      const normalize = text => String(text).toLowerCase().replace(/ё/g, 'е')
+        .replace(/\(замена\)\s*$/i, '').replace(/[^а-яa-z0-9]/g, '');
+      const key = normalize(value);
+      for (const [subject, aliases] of Object.entries(HOMEWORK_SUBJECTS)) {
+        const canonical = normalize(subject);
+        if (key === canonical || aliases.some(alias => normalize(alias) === key)) return canonical;
+      }
+      return key;
+    }
+
+    function diaryLessonNumber(text) {
+      const match = /^(\d{1,2})\s*урок[а]?\s*\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}\s*$/i.exec(text);
+      return match ? Number(match[1]) : null;
+    }
+
+    function readDiaryCards(ocrLines, image) {
+      const lines = ocrLines.map(line => ({ ...line, text: line.text.trim() })).filter(line => line.text);
+      const pixel = (x, y) => 4 * (y * image.width + x);
+      const black = (x, y) => image.data[pixel(x, y)] < 150;
+      const blue = (x, y) => {
+        const i = pixel(x, y);
+        return image.data[i + 2] > image.data[i] + 40 && image.data[i + 1] > image.data[i] + 10;
+      };
+      function strokeWidth(line) {
+        let ink = 0;
+        let strokes = 0;
+        for (const word of line.words) {
+          if (word.text.length < 3) continue;
+          const { x0, x1, y0, y1 } = word.bbox;
+          for (let y = y0; y < y1; y++) {
+            let inStroke = false;
+            for (let x = x0; x < x1; x++) {
+              const dark = black(x, y);
+              if (dark) ink++;
+              if (dark && !inStroke) strokes++;
+              inStroke = dark;
+            }
+          }
+        }
+        return strokes ? ink / strokes : 0;
+      }
+
+      let date = null;
+      const months = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+      const firstCard = lines.findIndex(line => diaryLessonNumber(line.text));
+      const calendar = lines.slice(0, firstCard);
+      for (const line of calendar) {
+        const month = /^([а-яё]+)\s+(\d{4})/i.exec(line.text);
+        const monthIndex = month ? months.indexOf(month[1].toLowerCase()) + 1 : 0;
+        if (!monthIndex) continue;
+        const dayRow = calendar.find(row => row.words.length >= 7 && row.words.filter(word => /^\D*\d{1,2}\D*$/.test(word.text)).length === 7);
+        if (!dayRow) break;
+        const selected = dayRow.words.filter(word => {
+          if (!/^\D*\d{1,2}\D*$/.test(word.text)) return false;
+          const { x0, x1, y0, y1 } = word.bbox;
+          const range = Math.ceil((y1 - y0) * 0.65);
+          const hasBorder = (from, to) => {
+            for (let x = Math.max(from, 0); x <= Math.min(to, image.width - 1); x++) {
+              let count = 0;
+              for (let y = y0; y < y1; y++) if (blue(x, y)) count++;
+              if (count > (y1 - y0) * 0.6) return true;
+            }
+            return false;
+          };
+          return hasBorder(x0 - range, x0 + 1) && hasBorder(x1 - 1, x1 + range);
+        });
+        if (selected.length === 1) date = `${month[2]}-${String(monthIndex).padStart(2, '0')}-${selected[0].text.replace(/\D/g, '').padStart(2, '0')}`;
+        break;
+      }
+
+      const assignments = [];
+      for (let start = firstCard; start >= 0 && start < lines.length;) {
+        let end = start + 1;
+        while (end < lines.length && !diaryLessonNumber(lines[end].text)) end++;
+        const [subject, ...body] = lines.slice(start + 1, end);
+        const num = diaryLessonNumber(lines[start].text);
+        start = end;
+        if (!subject || !body.length) continue;
+        const teacher = /^[а-яё-]+\s+[а-яё]\.\s*[а-яё]\.?$/i.test(body[0].text) ? body.shift() : null;
+        const normal = teacher ? strokeWidth(teacher) : strokeWidth(subject) * 0.6;
+        if (!normal) continue;
+        const marginX = Math.max(0, subject.bbox.x0 - 6);
+        const background = image.data[pixel(marginX, subject.bbox.y0)];
+        const homework = [];
+        for (const line of body) {
+          const outsideCard = Math.abs(image.data[pixel(marginX, line.bbox.y0)] - background) >= 5;
+          if (outsideCard || /(?:^|\s)Дневник(?:\s|$)|^\[\d+\]$/i.test(line.text)) break;
+          // In this diary the lesson topic is bold and homework is regular text.
+          if (strokeWidth(line) <= normal * 1.32) homework.push(line.text);
+        }
+        if (homework.length) assignments.push({ num, subject: subject.text, text: homework.join('\n') });
+      }
+      return { date, assignments };
+    }
+
+    function parseHomeworkPhotoText(text, key, lessons) {
+      if (text.split(/\r?\n/).some(line => diaryLessonNumber(line.trim()))) {
+        throw new Error('Не удалось прочитать карточки дневника. Попробуй более чёткий скриншот.');
+      }
+      const known = new Set([...Object.keys(HOMEWORK_SUBJECTS), ...lessons.map(lesson => lesson.subject)]
+        .map(normalizeHomeworkSubject));
+      const assignments = [];
+      let current;
+      const [, month, day] = key.split('-');
+      const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+      for (const line of text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)) {
+        const dateHeading = line.replace(/^(?:(?:домашнее задание|задания?|дз|дата сдачи|на|пн|вт|ср|чт|пт|сб|вс|понедельник|вторник|среда|четверг|пятница|суббота|воскресенье)[\s,:]+)+/i, '');
+        const date = /^(\d{1,2})[./](\d{1,2})(?:[./](\d{4}))?(?=\s|[,.]|$)/.exec(dateHeading);
+        const shortDate = /^(\d{1,2})\s+([а-яё]+)(?:\s+(\d{4}))?\s*$/i.exec(dateHeading);
+        const monthIndex = shortDate ? months.indexOf(shortDate[2].toLowerCase()) + 1 : 0;
+        if (date || monthIndex) {
+          const [, d, m, y] = date || [null, shortDate[1], monthIndex, shortDate[3]];
+          if (Number(d) !== Number(day) || Number(m) !== Number(month) || (y && y !== key.slice(0, 4))) {
+            throw new Error('Дата на фото отличается от выбранной. Открой нужный день и загрузи фото ещё раз.');
+          }
+          current = null;
+          continue;
+        }
+        const heading = line.replace(/^\s*(?:[•*·]\s*)?(?:\d{1,2}[.)]\s+)?/, '');
+        const pair = /^([^:—–]{2,65})\s*[:—–]\s*(.*)$/.exec(heading);
+        const subject = (pair?.[1] || heading).trim();
+        if (known.has(normalizeHomeworkSubject(subject))) {
+          current = { subject, text: pair?.[2].trim() || '' };
+          assignments.push(current);
+        } else if (current && !/^(?:домашнее задание|задание|д\s*\/\s*з|дз)\s*:?$/i.test(line)) {
+          if (pair && /^[а-яё\s]{3,}$/i.test(subject) && !/^(?:решить|прочитать|выучить|упражнение|задание|домашнее задание|страница)/i.test(subject)) {
+            current = null;
+          } else {
+            current.text = [current.text, line].filter(Boolean).join('\n');
+          }
+        }
+      }
+      return assignments.filter(entry => entry.text);
+    }
+
+    function stageHomeworkAssignments(assignments, draft, lessons, date) {
+      const matched = new Map();
+      let skipped = 0;
+      for (const assignment of assignments) {
+        const subject = typeof assignment?.subject === 'string' ? normalizeHomeworkSubject(assignment.subject) : '';
+        const text = typeof assignment?.text === 'string' ? assignment.text.trim() : '';
+        const options = subject ? lessons.filter(lesson => normalizeHomeworkSubject(lesson.subject) === subject) : [];
+        const lesson = assignment?.num == null ? options[0] : options.find(option => Number(option.num) === Number(assignment.num));
+        if (!lesson || !text) { skipped++; continue; }
+        if (!matched.has(lesson.num)) matched.set(lesson.num, { lesson, texts: new Set() });
+        matched.get(lesson.num).texts.add(text);
+      }
+      for (const { lesson, texts } of matched.values()) {
+        const text = [...texts].join('\n');
+        const previous = readHomework(draft.target, date, lesson);
+        draft.changes.set(lesson.num, { subject: lesson.subject, text, done: previous.text === text && previous.done });
+      }
+      return { count: matched.size, skipped };
+    }
+
+    async function importHomeworkPhoto() {
+      const draft = homeworkDraft;
+      if (!draft || draft.busy) return;
+      const file = document.getElementById('hw-photo-file').files?.[0];
+      if (!file) { showHomeworkMessage('Выбери фото ДЗ.', true); return; }
+      const date = new Date(`${draft.key}T12:00:00`);
+      const getLessons = () => getLessonsForDate(draft.target, date).filter(lesson => !lesson.subject?.startsWith('❌'));
+      const lessons = getLessons();
+      if (!lessons.length) { showHomeworkMessage('На эту дату нет уроков для ДЗ.', true); return; }
+
+      draft.busy = true;
+      showHomeworkMessage('Распознаём ДЗ на выбранную дату…');
+      renderDaySchedule();
+      try {
+        const apiKey = localStorage.getItem('gemini_api_key');
+        let result;
+        if (apiKey) {
+          const prompt = `Распознай домашние задания на дату сдачи ${draft.key}. Уроки на эту дату: ${JSON.stringify(lessons.map(({ num, subject }) => ({ num, subject })))}.
+Верни JSON {"date":null,"assignments":[{"subject":"предмет с фото","text":"точный текст задания"}]}.
+Если на фото несколько дат сдачи, извлекай только задания на выбранную дату. Если явно показана только другая дата сдачи, укажи её в date как ГГГГ-ММ-ДД и верни пустой список. Если даты сдачи нет, верни null. Дата выдачи задания не является датой сдачи.
+В приложении «Цифровая Школа Оренбуржья» используй выделенный в календаре день. В каждой карточке «N урок» название предмета и тема набраны жирным, имя учителя идёт под предметом, а ДЗ идёт обычным шрифтом после темы. Возвращай только ДЗ и номер карточки. Пропускай карточки без ДЗ и элементы интерфейса.
+Не выдумывай предметы и задания. Если на фото тетрадь без названия предмета, используй название урока из списка только когда содержание однозначно указывает на этот предмет. Если предмет неясен, пропусти запись. Добавляй поле num только если на фото явно указан номер урока по порядку. Не принимай номер упражнения за номер урока.`;
+          try { result = await requestPhotoJson(file, apiKey, prompt); } catch (error) { /* Используем локальное OCR. */ }
+        }
+        if (homeworkDraft !== draft) return;
+        if (result?.date && result.date !== draft.key) {
+          throw new Error('Дата на фото отличается от выбранной. Открой нужный день и загрузи фото ещё раз.');
+        }
+        let assignments = result?.assignments;
+        if (!Array.isArray(assignments) || !assignments.length) {
+          showHomeworkMessage('Читаем текст фото на устройстве…');
+          const { text, diary } = await readPhotoTextLocally(file, true);
+          if (homeworkDraft !== draft) return;
+          if (diary?.date && diary.date !== draft.key) {
+            throw new Error('Дата в дневнике отличается от выбранной. Открой нужный день и загрузи фото ещё раз.');
+          }
+          assignments = diary ? diary.assignments : parseHomeworkPhotoText(text, draft.key, lessons);
+        }
+
+        const { count, skipped } = stageHomeworkAssignments(assignments, draft, getLessons(), date);
+        if (!count) throw new Error('Не удалось сопоставить ДЗ с уроками. Проверь, видны ли на фото названия предметов.');
+        const note = skipped ? ` Пропущено записей без совпадения: ${skipped}.` : '';
+        showHomeworkMessage(`Найдено ДЗ для уроков: ${count}.${note} Проверь карандашом и нажми «Применить».`);
+      } catch (error) {
+        if (homeworkDraft === draft) showHomeworkMessage(error.message, true);
+      } finally {
+        if (homeworkDraft === draft) {
+          draft.busy = false;
+          renderDaySchedule();
+        }
+      }
+    }
+
     async function parseSchedulePhoto() {
       const apiKey = localStorage.getItem('gemini_api_key');
       const file = document.getElementById('photo-file-field').files?.[0];
@@ -1536,7 +1816,7 @@
         }
         if (useLocal) {
           msg.textContent = '⏳ Читаем фото на устройстве...';
-          const text = await readSchedulePhotoLocally(file);
+          const text = await readPhotoTextLocally(file);
           parsed = parseNumberedSchedule(text, target, key);
         }
 

@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 new vm.Script(script);
 const syncCode = script.slice(script.indexOf('    function parseNikaSchedule('), script.indexOf('    function parseSchoolInput('));
-const hwCode = script.slice(script.indexOf('    let activeHw ='), script.indexOf('    // Отрисовка списка:'));
+const hwCode = script.slice(script.indexOf('    let activeHw ='), script.indexOf('    function renderScheduleView()'));
 const fixture = {
   CLASSES: { '018': '10а', '019': '10б' },
   CLASS_SCHEDULE: { '9': { '018': { '101': { s: ['old'] } } },
@@ -22,7 +22,9 @@ function context(fetch, { fullApp = false, initialStorage = [], confirm = () => 
   const storage = new Map(initialStorage);
   const elements = new Map();
   function element() {
-    return { value: '', style: {}, focus() {}, appendChild() {},
+    const children = [];
+    return { value: '', style: {}, children, focus() {}, setAttribute() {}, appendChild(child) { children.push(child); },
+      set innerHTML(value) { this.markup = value; children.length = 0; }, get innerHTML() { return this.markup; },
       querySelector: () => ({ addEventListener() {} }), classList: { add() {}, remove() {}, toggle() {} } };
   }
   const ctx = vm.createContext({
@@ -98,14 +100,18 @@ test('failed sync preserves saved schedule', async () => {
   assert.match(c.elements.get('school-msg').textContent, /^Ошибка:/);
 });
 
-test('homework reset only clears the selected lesson and its completion flag', () => {
-  const c = context();
-  for (const key of ['nk_hw_boy_0_1', 'nk_chk_boy_0_1', 'nk_hw_girl_0_1', 'nk_hw_boy_0_2']) c.storage.set(key, 'keep');
-  c.run("openHwModal('boy', 0, 1, 'Алгебра'); resetHwModal()");
-  assert.equal(c.storage.has('nk_hw_boy_0_1'), false);
-  assert.equal(c.storage.has('nk_chk_boy_0_1'), false);
-  assert.equal(c.storage.get('nk_hw_girl_0_1'), 'keep');
-  assert.equal(c.storage.get('nk_hw_boy_0_2'), 'keep');
+test('homework reset for one lesson is staged and hides legacy homework only for the chosen date', () => {
+  const c = context(undefined, { fullApp: true, initialStorage: [['nk_hw_boy_0_1', 'Старое ДЗ'], ['nk_chk_boy_0_1', '1']] });
+  c.run('openSchedule("boy"); selectScheduleDate("2026-11-16"); toggleHomeworkEditor(); openHwModal(getBaseLessons("boy", 0)[0])');
+  assert.equal(c.elements.get('hw-modal-text').value, 'Старое ДЗ');
+  assert.equal(c.elements.get('hw-modal-chk').checked, true);
+  c.run('resetHwModal()');
+  assert.equal(c.storage.has('nk_hw_boy_2026-11-16'), false);
+  c.run('applyHomeworkDraft()');
+  assert.equal(c.run('readHomework("boy", selectedDate, getBaseLessons("boy", 0)[0]).text'), '');
+  assert.equal(c.run('readHomework("boy", selectedDate, getBaseLessons("boy", 0)[0]).done'), false);
+  c.run('selectScheduleDate("2026-11-23")');
+  assert.equal(c.run('readHomework("boy", selectedDate, getBaseLessons("boy", 0)[0]).text'), 'Старое ДЗ');
 });
 
 test('manual replacements survive reload and affect only their date and class', () => {
@@ -151,7 +157,7 @@ test('school exchanges apply on their own dates without mutating the recurring s
 test('global homework reset needs confirmation and preserves other settings', () => {
   let approved = false;
   const c = context(undefined, { confirm: () => approved });
-  const homeworkKeys = ['nk_hw_boy_0_1', 'nk_chk_girl_0_1', 'nk_hw_girl_2026-11-18_2'];
+  const homeworkKeys = ['nk_hw_boy_0_1', 'nk_chk_girl_0_1', 'nk_hw_girl_2026-11-18_2', 'nk_hw_boy_2026-11-18'];
   const otherKeys = ['nk_boy_sched', 'nk_day_replacements', 'gemini_api_key'];
   for (const key of [...homeworkKeys, ...otherKeys]) c.storage.set(key, 'value');
   c.run('resetAllHomework()');
@@ -238,4 +244,83 @@ test('a Gemini network error falls back to local OCR and rejects a mismatched da
   await c.run('parseSchedulePhoto()');
   assert.equal(c.storage.get('nk_day_replacements'), saved);
   assert.match(c.elements.get('photo-msg').textContent, /Проверь выбранную дату/);
+});
+
+function openHomeworkPhoto(c) {
+  c.ctx.FileReader = class {
+    readAsDataURL() { this.result = 'data:image/png;base64,eA=='; this.onload(); }
+  };
+  c.run('openSchedule("boy"); selectScheduleDate("2026-11-13"); toggleHomeworkEditor()');
+  c.elements.get('hw-photo-file').files = [{ type: 'image/png' }];
+}
+
+const fridayLessons = JSON.stringify({ 4: [
+  { num: 1, subject: 'Алг. и нач.мат.анализа' }, { num: 2, subject: 'Алг. и нач.мат.анализа' },
+  { num: 3, subject: 'История' }, { num: 4, subject: 'Физика' }
+] });
+
+test('a homework photo stages matched lessons and applies changes to one date only', async () => {
+  const c = context(async (url, { body }) => {
+    assert.match(JSON.parse(body).contents[0].parts[0].text, /2026-11-13/);
+    const result = { date: '2026-11-13', assignments: [
+      { subject: 'Алгебра', text: '№ 105' }, { subject: 'История', text: '§ 4', num: 3 },
+      { subject: 'География', text: 'Карта' }, { subject: 'Физика', text: 'Лабораторная', num: 3 }
+    ] };
+    return { json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(result) }] } }] }) };
+  }, { fullApp: true, initialStorage: [['gemini_api_key', 'test'], ['nk_boy_sched', fridayLessons]] });
+  openHomeworkPhoto(c);
+  const list = c.elements.get('lessons-render-target');
+  assert.ok(list.children.every(row => row.innerHTML.includes('pencil-btn')));
+  await c.run('importHomeworkPhoto()');
+  assert.equal(c.storage.has('nk_hw_boy_2026-11-13'), false);
+  assert.match(c.elements.get('hw-edit-msg').textContent, /Пропущено записей без совпадения: 2/);
+  assert.match(list.children[0].innerHTML, /№ 105/);
+  c.run('applyHomeworkDraft()');
+  const saved = JSON.parse(c.storage.get('nk_hw_boy_2026-11-13'));
+  assert.deepEqual(Object.keys(saved), ['1', '3']);
+  assert.equal(saved[3].text, '§ 4');
+  assert.ok(list.children.every(row => !row.innerHTML.includes('pencil-btn')));
+  c.run('selectScheduleDate("2026-11-20")');
+  assert.ok(list.children.every(row => !row.innerHTML.includes('№ 105')));
+});
+
+test('homework uses local OCR if Gemini fails and rejects a different date', async () => {
+  const c = context(async () => { throw new TypeError('Failed to fetch'); }, {
+    fullApp: true, initialStorage: [['gemini_api_key', 'test'], ['nk_boy_sched', fridayLessons]]
+  });
+  c.ctx.Tesseract = {
+    PSM: { SINGLE_BLOCK: '6' },
+    createWorker: async () => ({
+      setParameters: async () => {}, terminate: async () => {},
+      recognize: async () => ({ data: { text: 'Пятница, 13.11\nАлгебра\nРешить № 105\nИстория: § 4\nГеография: карта\nФизика: § 8' } })
+    })
+  };
+  openHomeworkPhoto(c);
+  await c.run('importHomeworkPhoto()');
+  c.run('applyHomeworkDraft()');
+  const saved = JSON.parse(c.storage.get('nk_hw_boy_2026-11-13'));
+  assert.deepEqual(Object.values(saved).map(row => row.text), ['Решить № 105', '§ 4', '§ 8']);
+
+  c.run('selectScheduleDate("2026-11-20"); toggleHomeworkEditor()');
+  c.elements.get('hw-photo-file').files = [{ type: 'image/png' }];
+  await c.run('importHomeworkPhoto()');
+  assert.match(c.elements.get('hw-edit-msg').textContent, /Дата на фото отличается/);
+  assert.equal(c.run('homeworkDraft.changes.size'), 0);
+});
+
+test('changing the day while a homework photo is being read discards the stale result', async () => {
+  let complete;
+  const c = context(() => new Promise(resolve => { complete = resolve; }), {
+    fullApp: true, initialStorage: [['gemini_api_key', 'test'], ['nk_boy_sched', fridayLessons]]
+  });
+  openHomeworkPhoto(c);
+  const pending = c.run('importHomeworkPhoto()');
+  await Promise.resolve();
+  assert.equal(typeof complete, 'function');
+  c.run('selectScheduleDate("2026-11-20")');
+  complete({ json: async () => ({ candidates: [{ content: { parts: [{ text: '{"assignments":[{"subject":"История","text":"§ 4"}]}' }] } }] }) });
+  await pending;
+  assert.equal(c.run('homeworkDraft.changes.size'), 0);
+  assert.equal(c.run('homeworkDraft.key'), '2026-11-20');
+  assert.equal(c.storage.has('nk_hw_boy_2026-11-13'), false);
 });
