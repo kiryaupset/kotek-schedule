@@ -1452,7 +1452,21 @@
         const { data } = await worker.recognize(file, {}, { text: true, blocks: withLayout });
         if (!withLayout) return data.text;
         const lines = (data.blocks || []).flatMap(block => block.paragraphs.flatMap(paragraph => paragraph.lines));
-        if (!lines.some(line => diaryLessonNumber(line.text.trim()))) return { text: data.text };
+        if (!lines.some(line => diaryLessonNumber(line.text.trim()))) {
+          const cleaned = lines.map(line => {
+            const clock = line.words.at(-1);
+            const previous = line.words.at(-2);
+            if (!previous || !/^\d{1,2}:\d{2}$/.test(clock.text)) return line.text.trim();
+            const textHeight = previous.bbox.y1 - previous.bbox.y0;
+            const clockHeight = clock.bbox.y1 - clock.bbox.y0;
+            // Messenger timestamps sit far to the right in smaller text.
+            const gap = clock.bbox.x0 - previous.bbox.x1;
+            return gap > textHeight && clockHeight < textHeight * 0.85
+              ? line.text.trimEnd().slice(0, -clock.text.length).trim()
+              : line.text.trim();
+          });
+          return { text: cleaned.length ? cleaned.join('\n') : data.text };
+        }
         const bitmap = await createImageBitmap(file);
         try {
           const canvas = document.createElement('canvas');
@@ -1696,9 +1710,22 @@
         }
         const heading = line.replace(/^\s*(?:[•*·]\s*)?(?:\d{1,2}[.)]\s+)?/, '');
         const pair = /^([^:—–]{2,65})\s*[:—–]\s*(.*)$/.exec(heading);
-        const subject = (pair?.[1] || heading).trim();
+        let subject = (pair?.[1] || heading).trim();
+        let task = pair?.[2].trim() || '';
+        if (!known.has(normalizeHomeworkSubject(subject))) {
+          // Chat messages often start with the subject and continue without a separator.
+          for (const word of heading.matchAll(/\S+/g)) {
+            const end = word.index + word[0].length;
+            if (end > 65 || /^[№§]/.test(word[0])) break;
+            const prefix = heading.slice(0, end);
+            if (known.has(normalizeHomeworkSubject(prefix))) {
+              subject = prefix;
+              task = heading.slice(end).replace(/^\s*[:—–-]?\s*/, '');
+            }
+          }
+        }
         if (known.has(normalizeHomeworkSubject(subject))) {
-          current = { subject, text: pair?.[2].trim() || '' };
+          current = { subject, text: task };
           assignments.push(current);
         } else if (current && !/^(?:домашнее задание|задание|д\s*\/\s*з|дз)\s*:?$/i.test(line)) {
           if (pair && /^[а-яё\s]{3,}$/i.test(subject) && !/^(?:решить|прочитать|выучить|упражнение|задание|домашнее задание|страница)/i.test(subject)) {
@@ -1752,6 +1779,7 @@
 Верни JSON {"date":null,"assignments":[{"subject":"предмет с фото","text":"точный текст задания"}]}.
 Если на фото несколько дат сдачи, извлекай только задания на выбранную дату. Если явно показана только другая дата сдачи, укажи её в date как ГГГГ-ММ-ДД и верни пустой список. Если даты сдачи нет, верни null. Дата выдачи задания не является датой сдачи.
 В приложении «Цифровая Школа Оренбуржья» используй выделенный в календаре день. В каждой карточке «N урок» название предмета и тема набраны жирным, имя учителя идёт под предметом, а ДЗ идёт обычным шрифтом после темы. Возвращай только ДЗ и номер карточки. Пропускай карточки без ДЗ и элементы интерфейса.
+В переписке название предмета может стоять в начале строки без двоеточия. Относи переносы строки к тому же заданию до следующего предмета. Пропускай время отправки сообщения.
 Не выдумывай предметы и задания. Если на фото тетрадь без названия предмета, используй название урока из списка только когда содержание однозначно указывает на этот предмет. Если предмет неясен, пропусти запись. Добавляй поле num только если на фото явно указан номер урока по порядку. Не принимай номер упражнения за номер урока.`;
           try { result = await requestPhotoJson(file, apiKey, prompt); } catch (error) { /* Используем локальное OCR. */ }
         }

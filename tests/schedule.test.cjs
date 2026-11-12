@@ -308,6 +308,16 @@ test('homework uses local OCR if Gemini fails and rejects a different date', asy
   assert.equal(c.run('homeworkDraft.changes.size'), 0);
 });
 
+test('chat homework uses the longest subject at the start of a line and keeps wrapped text', () => {
+  const c = context(undefined, { fullApp: true });
+  c.ctx.ocrText = 'история 15 параграф\nответить на вопросы\nрусский язык № 67–68\nанглийский язык упражнение\nна 41 странице\nлитература в группе';
+  const assignments = c.run('parseHomeworkPhotoText(ocrText, "2026-11-13", [])');
+  assert.deepEqual(Array.from(assignments, row => [row.subject, row.text]), [
+    ['история', '15 параграф\nответить на вопросы'], ['русский язык', '№ 67–68'],
+    ['английский язык', 'упражнение\nна 41 странице'], ['литература', 'в группе']
+  ]);
+});
+
 test('changing the day while a homework photo is being read discards the stale result', async () => {
   let complete;
   const c = context(() => new Promise(resolve => { complete = resolve; }), {
